@@ -2,6 +2,7 @@ use crate::commands::Command;
 use crate::config::Config;
 use crate::error::Result;
 use crate::library::Database;
+use async_trait::async_trait;
 
 /// Command to list songs in the database with optional filtering
 pub struct ListCommand {
@@ -18,8 +19,9 @@ impl ListCommand {
     }
 }
 
+#[async_trait]
 impl Command for ListCommand {
-    fn execute(&self, config: &Config) -> Result<()> {
+    async fn execute(&self, config: &Config) -> Result<()> {
         let database = Database::new(&config.database_path)?;
         let songs = database.get_all_songs()?;
         

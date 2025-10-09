@@ -2,6 +2,7 @@ use crate::commands::Command;
 use crate::config::Config;
 use crate::error::Result;
 use crate::library::Database;
+use async_trait::async_trait;
 
 /// Command to search for songs in the database
 pub struct SearchCommand {
@@ -14,8 +15,9 @@ impl SearchCommand {
     }
 }
 
+#[async_trait]
 impl Command for SearchCommand {
-    fn execute(&self, config: &Config) -> Result<()> {
+    async fn execute(&self, config: &Config) -> Result<()> {
         let database = Database::new(&config.database_path)?;
         let songs = database.get_all_songs()?;
         

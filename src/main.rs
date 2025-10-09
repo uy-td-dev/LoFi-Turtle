@@ -23,7 +23,8 @@ use config::Config;
 use error::{LofiTurtleError, Result};
 
 /// Main entry point for the LofiTurtle music player
-fn main() {
+#[tokio::main]
+async fn main() {
     // Initialize logging
     env_logger::init();
 
@@ -31,14 +32,14 @@ fn main() {
     let cli = Cli::parse();
 
     // Run application with proper error handling
-    if let Err(error) = run_application(cli) {
+    if let Err(error) = run_application(cli).await {
         display_error(&error);
         std::process::exit(1);
     }
 }
 
 /// Run the application with proper error handling
-fn run_application(cli: Cli) -> Result<()> {
+async fn run_application(cli: Cli) -> Result<()> {
     // Create configuration from CLI arguments
     let config = Config::from_cli(&cli)?;
 
@@ -47,7 +48,7 @@ fn run_application(cli: Cli) -> Result<()> {
         Some(command) => {
             // Execute the specified command
             let cmd = CommandFactory::create_command(command);
-            cmd.execute(&config)
+            cmd.execute(&config).await
         }
         None => {
             // Default behavior: check if CLI mode is requested
@@ -60,7 +61,7 @@ fn run_application(cli: Cli) -> Result<()> {
             } else {
                 // Default behavior: start the interactive music player (TUI mode)
                 let play_command = commands::PlayCommand::new();
-                play_command.execute(&config)
+                play_command.execute(&config).await
             }
         }
     }

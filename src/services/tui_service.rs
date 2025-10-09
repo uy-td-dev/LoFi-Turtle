@@ -13,6 +13,7 @@ use ratatui::{
 };
 use std::io;
 use std::time::{Duration, Instant};
+use tokio::task;
 
 /// Service responsible for managing the terminal user interface
 pub struct TuiService {
@@ -71,42 +72,57 @@ impl TuiService {
         Ok(())
     }
 
-    /// Initialize the music library if scanning is enabled
-    fn initialize_library(&self) -> Result<()> {
-        if self.config.no_scan {
+    /// Scans the music library and populates the database. This is a blocking operation.
+    fn scan_and_populate_library(config: &Config) -> Result<()> {
+        if config.no_scan {
             log::info!("Skipping library scan as requested");
             return Ok(());
         }
 
         log::info!("Initializing music library...");
-        let database = Database::new(&self.config.database_path)?;
-        
-        println!("Scanning music directory: {}", self.config.music_dir.display());
+        let database = Database::new(&config.database_path)?;
+
+        log::info!("Scanning music directory: {}", config.music_dir.display());
         let scanner = MusicScanner::new();
-        let songs = scanner.scan_directory(&self.config.music_dir)?;
-        
-        println!("Found {} songs. Adding to database...", songs.len());
+        let songs = scanner.scan_directory(&config.music_dir)?;
+
+        log::info!("Found {} songs. Adding to database...", songs.len());
         let mut error_count = 0;
-        
+
         for song in &songs {
             if let Err(e) = database.insert_song(song) {
                 log::warn!("Failed to insert song {}: {}", song.path, e);
                 error_count += 1;
             }
         }
-        
+
         if error_count > 0 {
-            println!("Warning: {} songs failed to be added to database", error_count);
+            log::warn!("Warning: {} songs failed to be added to database", error_count);
         }
-        
-        println!("Music library initialized successfully!");
+
+        log::info!("Music library initialized successfully!");
         Ok(())
     }
 
     /// Run the main TUI application loop
-    pub fn run(&mut self) -> Result<()> {
-        // Initialize library first
-        self.initialize_library()?;
+    pub async fn run(&mut self) -> Result<()> {
+        // Clone config for the background task
+        let config = self.config.clone();
+        if !self.config.no_scan {
+            // Spawn a background task for library initialization
+            tokio::spawn(async move {
+                let result = task::spawn_blocking(move || {
+                    Self::scan_and_populate_library(&config)
+                })
+                .await;
+
+                match result {
+                    Ok(Ok(_)) => log::info!("Background library scan finished successfully."),
+                    Ok(Err(e)) => log::error!("Library scanning failed: {}", e),
+                    Err(e) => log::error!("Library scanning task panicked: {}", e),
+                }
+            });
+        }
         
         // Setup terminal
         self.initialize_terminal()?;
