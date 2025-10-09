@@ -2,10 +2,13 @@ use crate::config::Config;
 use crate::error::{LofiTurtleError, Result};
 use crate::library::{Database, MusicScanner};
 use crate::ui::{draw_ui, App};
+use futures::{FutureExt, StreamExt};
 use ratatui::{
     backend::CrosstermBackend,
     crossterm::{
-        event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+        event::{
+            DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyEventKind,
+        },
         execute,
         terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
     },
@@ -13,7 +16,15 @@ use ratatui::{
 };
 use std::io;
 use std::time::{Duration, Instant};
-use tokio::task;
+use tokio::sync::mpsc;
+
+#[derive(Debug)]
+enum ScanEvent {
+    ScanStarted(usize),
+    FileProcessed,
+    ScanFinished,
+    ScanError(String),
+}
 
 /// Service responsible for managing the terminal user interface
 pub struct TuiService {
@@ -32,19 +43,16 @@ impl TuiService {
 
     /// Initialize the terminal interface
     fn initialize_terminal(&mut self) -> Result<()> {
-        enable_raw_mode().map_err(|e| {
-            LofiTurtleError::Terminal(format!("Failed to enable raw mode: {}", e))
-        })?;
+        enable_raw_mode()
+            .map_err(|e| LofiTurtleError::Terminal(format!("Failed to enable raw mode: {}", e)))?;
 
         let mut stdout = io::stdout();
-        execute!(stdout, EnterAlternateScreen, EnableMouseCapture).map_err(|e| {
-            LofiTurtleError::Terminal(format!("Failed to setup terminal: {}", e))
-        })?;
+        execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
+            .map_err(|e| LofiTurtleError::Terminal(format!("Failed to setup terminal: {}", e)))?;
 
         let backend = CrosstermBackend::new(stdout);
-        let terminal = Terminal::new(backend).map_err(|e| {
-            LofiTurtleError::Terminal(format!("Failed to create terminal: {}", e))
-        })?;
+        let terminal = Terminal::new(backend)
+            .map_err(|e| LofiTurtleError::Terminal(format!("Failed to create terminal: {}", e)))?;
 
         self.terminal = Some(terminal);
         Ok(())
@@ -72,112 +80,111 @@ impl TuiService {
         Ok(())
     }
 
-    /// Scans the music library and populates the database. This is a blocking operation.
-    fn scan_and_populate_library(config: &Config) -> Result<()> {
-        if config.no_scan {
-            log::info!("Skipping library scan as requested");
-            return Ok(());
-        }
-
-        log::info!("Initializing music library...");
-        let database = Database::new(&config.database_path)?;
-
-        log::info!("Scanning music directory: {}", config.music_dir.display());
-        let scanner = MusicScanner::new();
-        let songs = scanner.scan_directory(&config.music_dir)?;
-
-        log::info!("Found {} songs. Adding to database...", songs.len());
-        let mut error_count = 0;
-
-        for song in &songs {
-            if let Err(e) = database.insert_song(song) {
-                log::warn!("Failed to insert song {}: {}", song.path, e);
-                error_count += 1;
-            }
-        }
-
-        if error_count > 0 {
-            log::warn!("Warning: {} songs failed to be added to database", error_count);
-        }
-
-        log::info!("Music library initialized successfully!");
-        Ok(())
-    }
-
     /// Run the main TUI application loop
     pub async fn run(&mut self) -> Result<()> {
-        // Clone config for the background task
+        let (tx, mut rx) = mpsc::channel(100);
         let config = self.config.clone();
-        if !self.config.no_scan {
-            // Spawn a background task for library initialization
+
+        if !config.no_scan {
             tokio::spawn(async move {
-                let result = task::spawn_blocking(move || {
-                    Self::scan_and_populate_library(&config)
-                })
+                let scanner = MusicScanner::new();
+                let db_path = config.database_path.clone();
+                let music_dir = config.music_dir.clone();
+
+                let result: Result<()> = async {
+                    let database = Database::new(&db_path)?;
+                    let mut files_to_scan = Vec::new();
+                    scanner.scan_directory(&music_dir, &mut |path| {
+                        files_to_scan.push(path);
+                    })?;
+
+                    let total_files = files_to_scan.len();
+                    tx.send(ScanEvent::ScanStarted(total_files)).await.ok();
+
+                    for path in files_to_scan {
+                        if let Ok(song) = scanner.extract_metadata(&path) {
+                            if let Err(e) = database.insert_song(&song) {
+                                log::warn!("Failed to insert song {}: {}", song.path, e);
+                            }
+                        }
+                        tx.send(ScanEvent::FileProcessed).await.ok();
+                    }
+                    Ok(())
+                }
                 .await;
 
-                match result {
-                    Ok(Ok(_)) => log::info!("Background library scan finished successfully."),
-                    Ok(Err(e)) => log::error!("Library scanning failed: {}", e),
-                    Err(e) => log::error!("Library scanning task panicked: {}", e),
+                if let Err(e) = result {
+                    tx.send(ScanEvent::ScanError(e.to_string())).await.ok();
+                } else {
+                    tx.send(ScanEvent::ScanFinished).await.ok();
                 }
             });
         }
-        
-        // Setup terminal
+
         self.initialize_terminal()?;
-        
-        // Ensure terminal is restored even if an error occurs
-        let result = self.run_app_loop();
-        
-        // Always try to restore terminal
-        if let Err(restore_err) = self.restore_terminal() {
-            log::error!("Failed to restore terminal: {}", restore_err);
-        }
-        
+        let result = self.run_app_loop(&mut rx).await;
+        self.restore_terminal()?;
         result
     }
 
     /// Main application event loop
-    fn run_app_loop(&mut self) -> Result<()> {
-        let terminal = self.terminal.as_mut().ok_or_else(|| {
-            LofiTurtleError::Terminal("Terminal not initialized".to_string())
-        })?;
+    async fn run_app_loop(&mut self, rx: &mut mpsc::Receiver<ScanEvent>) -> Result<()> {
+        let terminal = self
+            .terminal
+            .as_mut()
+            .ok_or_else(|| LofiTurtleError::Terminal("Terminal not initialized".to_string()))?;
 
-        // Create app instance
         let mut app = App::new(&self.config)?;
         let mut last_tick = Instant::now();
         let tick_rate = Duration::from_millis(self.config.tick_rate_ms);
+        let mut event_stream = EventStream::new();
 
         loop {
-            // Draw UI
-            terminal.draw(|f| draw_ui(f, &mut app)).map_err(|e| {
-                LofiTurtleError::Terminal(format!("Failed to draw UI: {}", e))
-            })?;
-
-            // Handle events
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-
-            if event::poll(timeout).map_err(|e| {
-                LofiTurtleError::Terminal(format!("Failed to poll events: {}", e))
-            })? {
-                if let Event::Key(key) = event::read().map_err(|e| {
-                    LofiTurtleError::Terminal(format!("Failed to read event: {}", e))
-                })? {
-                    if key.kind == KeyEventKind::Press {
-                        if Self::handle_key_event(&mut app, key.code)? {
-                            break; // User requested quit
-                        }
-                    }
-                }
+            if app.state.dirty {
+                terminal
+                    .draw(|f| draw_ui(f, &mut app))
+                    .map_err(|e| LofiTurtleError::Terminal(format!("Failed to draw UI: {}", e)))?;
+                app.state.dirty = false;
             }
 
-            // Update app state on tick
+            let timeout = tick_rate.saturating_sub(last_tick.elapsed());
+
+            tokio::select! {
+                Some(event) = rx.recv() => {
+                    match event {
+                        ScanEvent::ScanStarted(total) => {
+                            app.state.is_scanning = true;
+                            app.state.scan_progress = (0, total);
+                            app.mark_dirty();
+                        }
+                        ScanEvent::FileProcessed => {
+                            app.state.scan_progress.0 += 1;
+                            app.mark_dirty();
+                        }
+                        ScanEvent::ScanFinished => {
+                            app.state.is_scanning = false;
+                            app.load_songs()?;
+                            app.load_playlists()?;
+                        }
+                        ScanEvent::ScanError(err_msg) => {
+                            app.state.is_scanning = false;
+                            log::error!("Scan error: {}", err_msg);
+                            app.mark_dirty();
+                        }
+                    }
+                },
+                Some(Ok(Event::Key(key))) = event_stream.next().fuse() => {
+                    if key.kind == KeyEventKind::Press {
+                        if Self::handle_key_event(&mut app, key.code)? {
+                            break;
+                        }
+                    }
+                },
+                _ = tokio::time::sleep(timeout) => {}
+            }
+
             if last_tick.elapsed() >= tick_rate {
                 app.update_playback_status();
-                // Check for song completion and handle auto-advancement
                 app.check_and_handle_song_completion()?;
                 last_tick = Instant::now();
             }

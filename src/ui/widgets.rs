@@ -63,6 +63,48 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
         }
         _ => {}
     }
+
+    // Draw scanning modal on top if scanning is in progress
+    if app.state.is_scanning {
+        draw_scanning_modal(f, app);
+    }
+}
+
+fn draw_scanning_modal(f: &mut Frame, app: &App) {
+    let area = f.area();
+    let popup_area = centered_rect(60, 25, area);
+
+    f.render_widget(Clear, popup_area);
+
+    let (processed, total) = app.state.scan_progress;
+    let percentage = if total > 0 {
+        (processed as f64 / total as f64) * 100.0
+    } else {
+        0.0
+    };
+
+    let block = Block::default()
+        .title("📀 Scanning Music Library...")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let layout = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(2)
+        .constraints([Constraint::Length(1), Constraint::Length(1), Constraint::Length(1)])
+        .split(popup_area);
+
+    f.render_widget(block, popup_area);
+
+    let text = Paragraph::new(format!("Processing file {} of {}...", processed, total))
+        .alignment(Alignment::Center);
+    f.render_widget(text, layout[0]);
+
+    let progress_bar = Gauge::default()
+        .gauge_style(Style::default().fg(Color::Cyan))
+        .percent(percentage as u16)
+        .label(format!("{:.0}%", percentage));
+    f.render_widget(progress_bar, layout[2]);
 }
 
 fn draw_search_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {

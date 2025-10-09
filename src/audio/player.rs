@@ -31,7 +31,7 @@ pub enum PlayerState {
     Paused,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PlaybackStatus {
     pub state: PlayerState,
     pub current_position: u64,  // Current position in seconds
