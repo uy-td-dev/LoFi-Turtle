@@ -2,6 +2,7 @@ use crate::commands::Command;
 use crate::config::Config;
 use crate::error::Result;
 use crate::library::{Database, MusicScanner};
+use async_trait::async_trait;
 
 /// Command to scan music library and update database
 pub struct ScanCommand {
@@ -14,8 +15,9 @@ impl ScanCommand {
     }
 }
 
+#[async_trait]
 impl Command for ScanCommand {
-    fn execute(&self, config: &Config) -> Result<()> {
+    async fn execute(&self, config: &Config) -> Result<()> {
         log::info!("Scanning music library at: {}", config.music_dir.display());
         
         let database = Database::new(&config.database_path)?;

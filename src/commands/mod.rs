@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::error::Result;
+use async_trait::async_trait;
 
 pub mod play;
 pub mod scan;
@@ -15,9 +16,10 @@ pub use playlist::{PlaylistCommand, ShuffleCommand, RepeatCommand};
 
 /// Command trait for implementing the Command pattern
 /// Each CLI operation implements this trait for consistent execution
+#[async_trait]
 pub trait Command {
     /// Execute the command with the given configuration
-    fn execute(&self, config: &Config) -> Result<()>;
+    async fn execute(&self, config: &Config) -> Result<()>;
     
     /// Get a description of what this command does
     #[allow(dead_code)] // Future feature: help system
