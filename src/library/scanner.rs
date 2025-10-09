@@ -3,7 +3,7 @@ use crate::error::{LofiTurtleError, Result};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct MusicScanner;
 
@@ -12,30 +12,31 @@ impl MusicScanner {
         Self
     }
 
-    pub fn scan_directory<P: AsRef<Path>>(&self, dir_path: P) -> Result<Vec<Song>> {
-        let mut songs = Vec::new();
-        self.scan_recursive(dir_path.as_ref(), &mut songs)?;
-        Ok(songs)
+    pub fn scan_directory<P: AsRef<Path>>(
+        &self,
+        dir_path: P,
+        on_file_found: &mut dyn FnMut(PathBuf),
+    ) -> Result<()> {
+        self.scan_recursive(dir_path.as_ref(), on_file_found)
     }
 
-    fn scan_recursive(&self, dir: &Path, songs: &mut Vec<Song>) -> Result<()> {
-        let entries = fs::read_dir(dir)
-            .map_err(|e| LofiTurtleError::FileSystem(e))?;
+    fn scan_recursive(
+        &self,
+        dir: &Path,
+        on_file_found: &mut dyn FnMut(PathBuf),
+    ) -> Result<()> {
+        let entries = fs::read_dir(dir).map_err(|e| LofiTurtleError::FileSystem(e))?;
 
         for entry in entries {
             let entry = entry.map_err(LofiTurtleError::FileSystem)?;
             let path = entry.path();
 
             if path.is_dir() {
-                // Recursively scan subdirectories
-                if let Err(e) = self.scan_recursive(&path, songs) {
+                if let Err(e) = self.scan_recursive(&path, on_file_found) {
                     log::warn!("Failed to scan directory {}: {}", path.display(), e);
                 }
             } else if self.is_audio_file(&path) {
-                match self.extract_metadata(&path) {
-                    Ok(song) => songs.push(song),
-                    Err(e) => log::warn!("Failed to extract metadata from {}: {}", path.display(), e),
-                }
+                on_file_found(path);
             }
         }
 
@@ -51,7 +52,7 @@ impl MusicScanner {
         }
     }
 
-    fn extract_metadata(&self, path: &Path) -> Result<Song> {
+    pub fn extract_metadata(&self, path: &Path) -> Result<Song> {
         let tagged_file = Probe::open(path)
             .map_err(|e| LofiTurtleError::UnsupportedFormat(format!("Failed to open audio file '{}': {}", path.display(), e)))?
             .read()
