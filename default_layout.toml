@@ -1,0 +1,161 @@
+version = "1.0"
+name = "default_lofi"
+description = "Default LoFi Turtle layout with sidebar, playlist, and now playing"
+
+[theme]
+name = "gruvbox"
+#
+#[theme.colors]
+#secondary = "yellow"
+#error = "red"
+#border = "gray"
+#background = "black"
+#primary = "cyan"
+#playing = "bright_green"
+#paused = "bright_yellow"
+#progress = "blue"
+#foreground = "white"
+#highlight = "bright_cyan"
+#success = "green"
+#
+#[[widgets]]
+#name = "sidebar"
+#widget_type = "sidebar"
+#position = "left"
+#visible = true
+#border = true
+#title = "Library"
+#
+#[widgets.size]
+#percentage = 25
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "gray"
+#highlight_color = "cyan"
+#selected_color = "yellow"
+#
+#[[widgets]]
+#name = "playlist"
+#widget_type = "playlist_view"
+#position = "center"
+#size = "fill"
+#visible = true
+#border = true
+#title = "Current Playlist"
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "gray"
+#highlight_color = "cyan"
+#selected_color = "yellow"
+#
+#[[widgets]]
+#name = "now_playing"
+#widget_type = "now_playing"
+#position = "right"
+#visible = true
+#border = true
+#title = "Now Playing"
+#
+#[widgets.size]
+#percentage = 30
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "gray"
+#highlight_color = "cyan"
+#selected_color = "yellow"
+#
+#[[widgets]]
+#name = "progress"
+#widget_type = "progress_bar"
+#position = "bottom"
+#visible = true
+#border = false
+#
+#[widgets.size]
+#length = 3
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "gray"
+#highlight_color = "cyan"
+#selected_color = "yellow"
+#
+#[[widgets]]
+#name = "status"
+#widget_type = "status_bar"
+#position = "bottom"
+#visible = true
+#border = false
+#
+#[widgets.size]
+#length = 1
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "gray"
+#highlight_color = "cyan"
+#selected_color = "yellow"
+#
+#[keybindings]
+#- = "volume_down"
+#esc = "back"
+#"ctrl+c" = "quit"
+#f4 = "toggle_waveform"
+#page_up = "page_up"
+#1 = "switch_to_library"
+#space = "toggle_play"
+#"ctrl+r" = "refresh_library"
+#"+" = "volume_up"
+#a = "add_to_playlist"
+#backspace = "back"
+#i = "show_info"
+#left = "seek_backward"
+#f11 = "toggle_fullscreen"
+#f2 = "toggle_sidebar"
+#tab = "switch_focus"
+#down = "move_down"
+#q = "quit"
+#f5 = "reload_layout"
+#p = "previous_track"
+#up = "move_up"
+#2 = "switch_to_playlists"
+#"ctrl+s" = "save_playlist"
+#4 = "switch_to_history"
+#"ctrl+o" = "open_playlist"
+#"?" = "search_reverse"
+#d = "remove_from_playlist"
+#f3 = "toggle_album_art"
+#home = "go_to_start"
+#l = "show_lyrics"
+#m = "toggle_mute"
+#r = "toggle_repeat"
+#page_down = "page_down"
+#5 = "switch_to_favorites"
+#right = "seek_forward"
+#enter = "select"
+#"/" = "search"
+#3 = "switch_to_queue"
+#"ctrl+f" = "filter"
+#f = "add_to_favorites"
+#n = "next_track"
+#end = "go_to_end"
+#s = "toggle_shuffle"
+#"shift+tab" = "switch_focus_reverse"
+#f1 = "help"
+#
+#[settings]
+#auto_save = true
+#debounce_ms = 300
+#
+#[settings.responsive]
+#small_width = 80
+#medium_width = 120
+#large_width = 160

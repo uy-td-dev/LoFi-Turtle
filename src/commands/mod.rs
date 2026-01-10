@@ -1,6 +1,5 @@
-use crate::config::Config;
+use crate::config::{Config, LayoutConfig};
 use crate::error::Result;
-use async_trait::async_trait;
 
 pub mod play;
 pub mod scan;
@@ -16,10 +15,15 @@ pub use playlist::{PlaylistCommand, ShuffleCommand, RepeatCommand};
 
 /// Command trait for implementing the Command pattern
 /// Each CLI operation implements this trait for consistent execution
-#[async_trait]
 pub trait Command {
     /// Execute the command with the given configuration
-    async fn execute(&self, config: &Config) -> Result<()>;
+    fn execute(&self, config: &Config) -> Result<()>;
+    
+    /// Execute the command with both app config and layout config
+    fn execute_with_layout(&self, config: &Config, _layout_config: &LayoutConfig) -> Result<()> {
+        // Default fallback to old execute method for backward compatibility
+        self.execute(config)
+    }
     
     /// Get a description of what this command does
     #[allow(dead_code)] // Future feature: help system
@@ -40,8 +44,15 @@ impl CommandFactory {
             }
             crate::cli::Commands::Search { query } => Box::new(SearchCommand::new(query.clone())),
             crate::cli::Commands::Playlist { action } => Box::new(PlaylistCommand::new(action.clone())),
-            crate::cli::Commands::Shuffle { mode } => Box::new(ShuffleCommand::new(mode.clone())),
-            crate::cli::Commands::Repeat { mode } => Box::new(RepeatCommand::new(mode.clone())),
+            crate::cli::Commands::Shuffle { mode } => {
+                // Handle Option<ShuffleMode>
+                let mode = mode.clone().unwrap_or(crate::cli::ShuffleMode::Toggle);
+                Box::new(ShuffleCommand::new(mode))
+            },
+            crate::cli::Commands::Repeat { mode } => {
+                // RepeatModeArg is not Option in Commands::Repeat, so we use it directly
+                Box::new(RepeatCommand::new(mode.clone()))
+            },
         }
     }
 }

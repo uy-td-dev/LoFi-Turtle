@@ -15,6 +15,8 @@ pub struct Song {
     display_name_cache: OnceLock<String>,
     #[serde(skip)]
     duration_formatted_cache: OnceLock<String>,
+    #[serde(skip)]
+    search_string_cache: OnceLock<String>,
 }
 
 impl Song {
@@ -35,6 +37,7 @@ impl Song {
             duration,
             display_name_cache: OnceLock::new(),
             duration_formatted_cache: OnceLock::new(),
+            search_string_cache: OnceLock::new(),
         }
     }
 
@@ -56,5 +59,14 @@ impl Song {
                 format!("{} - {}", self.title, self.artist)
             }
         })
+    }
+
+    /// Check if the song matches the given query (case-insensitive)
+    /// Uses a cached lowercased search string to avoid repeated allocations
+    pub fn matches(&self, query_lower: &str) -> bool {
+        let search_string = self.search_string_cache.get_or_init(|| {
+            format!("{} {} {}", self.title, self.artist, self.album).to_lowercase()
+        });
+        search_string.contains(query_lower)
     }
 }

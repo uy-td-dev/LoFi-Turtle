@@ -1,9 +1,10 @@
 use crate::audio::{AudioPlayer, PlayerCommand, PlayerState, PlaybackStatus};
-use crate::config::{Config, PersistentSettings};
+use crate::config::{Config, PersistentSettings, LayoutConfig};
 use crate::error::{Result, LofiTurtleError};
 use crate::library::Database;
 use crate::models::{Song, Playlist, PlaybackState};
 use crate::art::AlbumArtRenderer;
+use crate::ui::theme::Themes;
 use ratatui::crossterm::event::Event;
 use std::time::Instant;
 use tui_textarea::TextArea;
@@ -48,19 +49,19 @@ pub struct AppState {
     pub current_album_art: Option<String>,
     pub should_quit: bool,
     pub last_update: Instant,
+    // New fields for scanning status
     pub is_scanning: bool,
     pub scan_progress: (usize, usize),
-    pub dirty: bool,
 }
 
 impl Default for AppState {
     fn default() -> Self {
         let mut search_textarea = TextArea::default();
         search_textarea.set_placeholder_text("Search songs...");
-
+        
         let mut playlist_name_textarea = TextArea::default();
         playlist_name_textarea.set_placeholder_text("Enter playlist name...");
-
+        
         Self {
             songs: Vec::new(),
             filtered_songs: Vec::new(),
@@ -81,7 +82,6 @@ impl Default for AppState {
             last_update: Instant::now(),
             is_scanning: false,
             scan_progress: (0, 0),
-            dirty: true,
         }
     }
 }
@@ -92,42 +92,40 @@ pub struct App {
     pub audio_player: AudioPlayer,
     pub album_art_renderer: AlbumArtRenderer,
     pub persistent_settings: PersistentSettings,
+    pub layout_config: LayoutConfig,
 }
 
 impl App {
-    pub fn mark_dirty(&mut self) {
-        self.state.dirty = true;
-    }
-
-    pub fn new(config: &Config) -> Result<Self> {
+    pub fn new(config: &Config, layout_config: &LayoutConfig) -> Result<Self> {
         let database = Database::new(&config.database_path)?;
         let audio_player = AudioPlayer::new()?;
         let album_art_renderer = AlbumArtRenderer::new(config.album_art_config.clone());
-
+        
         // Load persistent settings and set initial volume
         let persistent_settings = PersistentSettings::load();
         let initial_volume = persistent_settings.volume;
-
+        
         let mut app = Self {
             state: AppState::default(),
             database,
             audio_player,
             album_art_renderer,
             persistent_settings,
+            layout_config: layout_config.clone(),
         };
-
+        
         // Set initial volume from persistent settings
         app.set_volume(initial_volume)?;
 
         // Load songs and playlists from database
         app.load_songs()?;
         app.load_playlists()?;
-
+        
         // Apply config settings
         app.state.show_album_art = config.show_art;
         app.state.playback_state.shuffle = config.shuffle;
         app.state.playback_state.repeat_mode = config.repeat_mode.clone();
-
+        
         Ok(app)
     }
 
@@ -148,20 +146,17 @@ impl App {
         self.update_filtered_songs();
         Ok(())
     }
-
+    
     pub fn load_playlists(&mut self) -> Result<()> {
         self.state.playlists = self.database.get_all_playlists()?;
-
+        
         // Ensure selected index is valid after loading
-        if self.state.selected_playlist_index >= self.state.playlists.len()
-            && !self.state.playlists.is_empty()
-        {
+        if self.state.selected_playlist_index >= self.state.playlists.len() && !self.state.playlists.is_empty() {
             self.state.selected_playlist_index = self.state.playlists.len() - 1;
         } else if self.state.playlists.is_empty() {
             self.state.selected_playlist_index = 0;
         }
-        self.mark_dirty();
-
+        
         Ok(())
     }
 
@@ -172,16 +167,10 @@ impl App {
         } else {
             // Optimization: Pre-lowercase query once to avoid repeated allocations
             let query_lower = self.state.search_query.to_lowercase();
-
-            self.state.filtered_songs = self.state
-                .songs
+            
+            self.state.filtered_songs = self.state.songs
                 .iter()
-                .filter(|song| {
-                    // Optimization: Use pre-lowercased query and include album in search
-                    song.title.to_lowercase().contains(&query_lower)
-                        || song.artist.to_lowercase().contains(&query_lower)
-                        || song.album.to_lowercase().contains(&query_lower)
-                })
+                .filter(|song| song.matches(&query_lower))
                 .cloned()
                 .collect();
         }
@@ -190,7 +179,6 @@ impl App {
         if self.state.selected_song_index >= self.state.filtered_songs.len() {
             self.state.selected_song_index = 0;
         }
-        self.mark_dirty();
     }
 
     // Panel navigation methods
@@ -203,12 +191,11 @@ impl App {
                 } else {
                     ActivePanel::Playlists
                 }
-            }
+            },
             ActivePanel::AlbumArt => ActivePanel::Playlists,
         };
-        self.mark_dirty();
     }
-
+    
     pub fn switch_to_previous_panel(&mut self) {
         self.state.active_panel = match self.state.active_panel {
             ActivePanel::Playlists => {
@@ -217,11 +204,10 @@ impl App {
                 } else {
                     ActivePanel::Songs
                 }
-            }
+            },
             ActivePanel::Songs => ActivePanel::Playlists,
             ActivePanel::AlbumArt => ActivePanel::Songs,
         };
-        self.mark_dirty();
     }
 
     // Selection movement methods
@@ -249,7 +235,6 @@ impl App {
                 // Album art panel doesn't have selectable items
             }
         }
-        self.mark_dirty();
     }
 
     pub fn move_selection_down(&mut self) {
@@ -276,27 +261,18 @@ impl App {
                 // Album art panel doesn't have selectable items
             }
         }
-        self.mark_dirty();
     }
 
     pub fn play_selected_song(&mut self) -> Result<()> {
         match self.state.active_panel {
             ActivePanel::Songs => {
-                if let Some(song) = self
-                    .state
-                    .filtered_songs
-                    .get(self.state.selected_song_index)
-                    .cloned()
-                {
-                    self.audio_player
-                        .send_command(PlayerCommand::Play(song.path.clone()))?;
+                if let Some(song) = self.state.filtered_songs.get(self.state.selected_song_index).cloned() {
+                    self.audio_player.send_command(PlayerCommand::Play(song.path.clone()))?;
                     self.update_album_art(&song)?;
                 }
             }
             ActivePanel::Playlists => {
-                if let Some(playlist) =
-                    self.state.playlists.get(self.state.selected_playlist_index).cloned()
-                {
+                if let Some(playlist) = self.state.playlists.get(self.state.selected_playlist_index).cloned() {
                     self.switch_to_playlist(&playlist.name)?;
                 }
             }
@@ -304,7 +280,6 @@ impl App {
                 // Album art panel doesn't have playable items
             }
         }
-        self.mark_dirty();
         Ok(())
     }
 
@@ -321,27 +296,21 @@ impl App {
                 self.play_selected_song()?;
             }
         }
-        self.mark_dirty();
         Ok(())
     }
 
     pub fn stop_playback(&mut self) -> Result<()> {
         self.audio_player.send_command(PlayerCommand::Stop)?;
-        self.mark_dirty();
         Ok(())
     }
 
     pub fn enter_search_mode(&mut self) {
         self.state.input_mode = InputMode::Search;
-        self.state
-            .search_textarea
-            .move_cursor(tui_textarea::CursorMove::End);
-        self.mark_dirty();
+        self.state.search_textarea.move_cursor(tui_textarea::CursorMove::End);
     }
 
     pub fn exit_search_mode(&mut self) {
         self.state.input_mode = InputMode::Normal;
-        self.mark_dirty();
     }
 
     pub fn update_search_query(&mut self) {
@@ -354,21 +323,15 @@ impl App {
 
     pub fn clear_search(&mut self) {
         self.state.search_textarea = TextArea::default();
-        self.state
-            .search_textarea
-            .set_placeholder_text("Search songs...");
+        self.state.search_textarea.set_placeholder_text("Search songs...");
         self.state.search_query.clear();
         self.update_filtered_songs();
     }
 
     pub fn update_playback_status(&mut self) {
-        let new_status = self.audio_player.get_status();
-        if self.state.playback_status != new_status {
-            self.state.playback_status = new_status;
-            self.mark_dirty();
-        }
+        self.state.playback_status = self.audio_player.get_status();
         self.state.last_update = Instant::now();
-
+        
         // Update album art if song changed
         if let Some(current_song) = self.get_current_song().cloned() {
             if self.state.show_album_art {
@@ -380,7 +343,6 @@ impl App {
     pub fn quit(&mut self) -> Result<()> {
         self.state.should_quit = true;
         self.audio_player.send_command(PlayerCommand::Quit)?;
-        self.mark_dirty();
         Ok(())
     }
 
@@ -565,19 +527,17 @@ impl App {
     pub fn toggle_shuffle(&mut self) -> Result<()> {
         let playlist_size = self.state.filtered_songs.len();
         self.state.playback_state.toggle_shuffle(playlist_size);
-
+        
         // Save to persistent settings
         self.save_playback_settings()?;
-        self.mark_dirty();
         Ok(())
     }
-
+    
     pub fn cycle_repeat_mode(&mut self) -> Result<()> {
         self.state.playback_state.cycle_repeat_mode();
-
+        
         // Save to persistent settings
         self.save_playback_settings()?;
-        self.mark_dirty();
         Ok(())
     }
 
@@ -648,6 +608,7 @@ impl App {
     }
 
     /// Generate album art placeholder with dynamic dimensions
+    #[allow(dead_code)]
     pub fn generate_album_art_placeholder(&mut self, panel_width: u16, panel_height: u16) -> String {
         if !self.state.show_album_art {
             return String::new();
@@ -724,6 +685,23 @@ impl App {
         self.persistent_settings.update_volume(clamped_volume)?;
         
         Ok(())
+    }
+
+    /// Cycle through available themes
+    pub fn cycle_theme(&mut self) {
+        let themes = Themes::all();
+        let current_theme_name = &self.layout_config.theme.name;
+
+        // Find current theme index
+        let current_index = themes.iter()
+            .position(|t| &t.name == current_theme_name)
+            .unwrap_or(0);
+
+        // Calculate next index
+        let next_index = (current_index + 1) % themes.len();
+
+        // Update theme
+        self.layout_config.theme = themes[next_index].clone();
     }
     
 }

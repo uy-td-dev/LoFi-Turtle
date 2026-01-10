@@ -2,68 +2,66 @@ use crate::commands::Command;
 use crate::config::Config;
 use crate::error::Result;
 use crate::library::Database;
-use async_trait::async_trait;
 
-/// Command to list songs in the database with optional filtering
 pub struct ListCommand {
-    artist_filter: Option<String>,
-    album_filter: Option<String>,
+    artist: Option<String>,
+    album: Option<String>,
 }
 
 impl ListCommand {
-    pub fn new(artist_filter: Option<String>, album_filter: Option<String>) -> Self {
-        Self {
-            artist_filter,
-            album_filter,
-        }
+    pub fn new(artist: Option<String>, album: Option<String>) -> Self {
+        Self { artist, album }
     }
 }
 
-#[async_trait]
 impl Command for ListCommand {
-    async fn execute(&self, config: &Config) -> Result<()> {
+    fn execute(&self, config: &Config) -> Result<()> {
         let database = Database::new(&config.database_path)?;
         let songs = database.get_all_songs()?;
-        
-        let filtered_songs: Vec<_> = songs
-            .iter()
-            .filter(|song| {
-                if let Some(ref artist) = self.artist_filter {
-                    if !song.artist.to_lowercase().contains(&artist.to_lowercase()) {
-                        return false;
-                    }
+
+        let filtered_songs: Vec<_> = songs.into_iter().filter(|song| {
+            if let Some(ref artist) = self.artist {
+                if !song.artist.to_lowercase().contains(&artist.to_lowercase()) {
+                    return false;
                 }
-                if let Some(ref album) = self.album_filter {
-                    if !song.album.to_lowercase().contains(&album.to_lowercase()) {
-                        return false;
-                    }
+            }
+            if let Some(ref album) = self.album {
+                if !song.album.to_lowercase().contains(&album.to_lowercase()) {
+                    return false;
                 }
-                true
-            })
-            .collect();
-        
+            }
+            true
+        }).collect();
+
         if filtered_songs.is_empty() {
-            println!("No songs found matching the criteria.");
-            return Ok(());
+            println!("No songs found matching criteria.");
+        } else {
+            println!("Found {} songs:", filtered_songs.len());
+            println!("{:<50} | {:<30} | {:<30} | {:<10}", "Title", "Artist", "Album", "Duration");
+            println!("{:-<50}-+-{:-<30}-+-{:-<30}-+-{:-<10}", "", "", "", "");
+
+            for song in filtered_songs {
+                println!("{:<50} | {:<30} | {:<30} | {:<10}",
+                    truncate(&song.title, 50),
+                    truncate(&song.artist, 30),
+                    truncate(&song.album, 30),
+                    song.duration_formatted()
+                );
+            }
         }
-        
-        println!("Found {} songs:", filtered_songs.len());
-        println!("{:-<80}", "");
-        
-        for song in filtered_songs {
-            println!(
-                "{} - {} [{}] ({})",
-                song.title,
-                song.artist,
-                song.album,
-                song.duration_formatted()
-            );
-        }
-        
+
         Ok(())
     }
 
     fn description(&self) -> &'static str {
-        "List all songs in the database with optional filtering"
+        "List songs in the library with optional filtering"
+    }
+}
+
+fn truncate(s: &str, max_width: usize) -> String {
+    if s.len() > max_width {
+        format!("{}...", &s[0..max_width-3])
+    } else {
+        s.to_string()
     }
 }

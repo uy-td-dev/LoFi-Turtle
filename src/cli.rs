@@ -52,6 +52,14 @@ pub struct Cli {
     #[arg(long)]
     pub cli_mode: bool,
 
+    /// Layout configuration file path
+    #[arg(long, value_name = "FILE", default_value = "layout.toml")]
+    pub layout_config: PathBuf,
+
+    /// Dump complete layout configuration to file
+    #[arg(long, value_name = "FILE")]
+    pub dump_layout: Option<PathBuf>,
+
     /// Subcommands
     #[command(subcommand)]
     pub command: Option<Commands>,

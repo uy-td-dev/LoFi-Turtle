@@ -1,3 +1,8 @@
+//! Application configuration structures
+//! 
+//! This module contains the main application configuration structures that were
+//! previously in config.rs, now properly organized within the config module.
+
 use crate::error::{LofiTurtleError, Result};
 use crate::models::RepeatMode;
 use crate::art::AlbumArtConfig;
@@ -168,7 +173,6 @@ impl ConfigBuilder {
         self.show_art = Some(show_art);
         self
     }
-
 
     /// Enable or disable shuffle mode
     pub fn shuffle(mut self, shuffle: bool) -> Self {

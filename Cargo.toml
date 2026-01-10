@@ -1,7 +1,16 @@
 [package]
 name = "lofiturtle"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+# Support both binary and library
+[[bin]]
+name = "lofiturtle"
+path = "src/main.rs"
+
+[lib]
+name = "lofiturtle"
+path = "src/lib.rs"
 
 [dependencies]
 # CLI and argument parsing
@@ -11,7 +20,6 @@ clap = { version = "4.5.45", features = ["derive"] }
 ratatui = "0.29.0"
 crossterm = { version = "0.28.1", features = ["event-stream"] }
 tui-textarea = "0.7.0"
-
 # Audio processing
 rodio = "0.21.1"
 lofty = "0.22.4"
@@ -23,6 +31,7 @@ rusqlite = { version = "0.37.0", features = ["bundled"] }
 thiserror = "2.0.16"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.132"
+toml = "0.8.19"
 
 # Async runtime and utilities
 tokio = { version = "1.47.1", features = ["full"] }
@@ -38,8 +47,12 @@ image = "0.25.6"  # For album art processing
 # Additional utilities
 chrono = { version = "0.4.41", features = ["serde"] }
 rand = "0.9.2"  # For shuffle randomization
+notify = "6.1.1"  # For file watching and hot-reload
 
 
 # Logging
 log = "0.4.27"
 env_logger = "0.11.8"
+
+[dev-dependencies]
+tempfile = "3.8.1"

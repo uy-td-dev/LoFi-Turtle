@@ -19,9 +19,6 @@ impl Default for RepeatMode {
     }
 }
 
-impl RepeatMode {
-}
-
 /// Playback state for the music player
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct PlaybackState {
@@ -123,6 +120,10 @@ impl PlaybackState {
         indices.shuffle(&mut rng());
         
         // Remove current song from shuffle queue and add it to front
+        // This ensures we don't immediately replay the current song if it ends up later in the queue
+        // But wait, usually we want the *next* song to be random.
+        // If we just enabled shuffle, we are currently playing 'current_song_index'.
+        // We should remove it from the queue so it doesn't play again until the queue resets.
         if let Some(pos) = indices.iter().position(|&x| x == self.current_song_index) {
             indices.remove(pos);
         }
@@ -163,6 +164,7 @@ impl PlaybackState {
                     (self.current_song_index + 1) % playlist_size
                 };
 
+                // Check for end of playlist in None repeat mode (non-shuffle)
                 if self.repeat_mode == RepeatMode::None && !self.shuffle && next_index == 0 && self.current_song_index == playlist_size - 1 {
                     None // End of playlist, no repeat
                 } else {
@@ -183,7 +185,8 @@ impl PlaybackState {
             RepeatMode::None | RepeatMode::Playlist => {
                 let prev_index = if self.shuffle {
                     // For shuffle, we'll use a simple previous logic
-                    // In a real implementation, you might want to maintain a history
+                    // In a real implementation, you might want to maintain a history stack
+                    // For now, just go to previous in list or wrap around
                     if self.current_song_index == 0 {
                         playlist_size - 1
                     } else {
@@ -213,6 +216,127 @@ impl PlaybackState {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
+    #[test]
+    fn test_initial_state() {
+        let state = PlaybackState::default();
+        assert!(!state.shuffle);
+        assert_eq!(state.repeat_mode, RepeatMode::None);
+        assert_eq!(state.current_song_index, 0);
+        assert_eq!(state.volume, 0.7);
+    }
 
+    #[test]
+    fn test_cycle_repeat_mode() {
+        let mut state = PlaybackState::default();
 
+        // None -> Single
+        state.cycle_repeat_mode();
+        assert_eq!(state.repeat_mode, RepeatMode::Single);
+
+        // Single -> Playlist
+        state.cycle_repeat_mode();
+        assert_eq!(state.repeat_mode, RepeatMode::Playlist);
+
+        // Playlist -> None
+        state.cycle_repeat_mode();
+        assert_eq!(state.repeat_mode, RepeatMode::None);
+    }
+
+    #[test]
+    fn test_next_song_normal_flow() {
+        let mut state = PlaybackState::default();
+        let playlist_size = 3;
+
+        // 0 -> 1
+        let next = state.next_song_index(playlist_size);
+        assert_eq!(next, Some(1));
+        state.current_song_index = 1;
+
+        // 1 -> 2
+        let next = state.next_song_index(playlist_size);
+        assert_eq!(next, Some(2));
+        state.current_song_index = 2;
+
+        // 2 -> None (End of playlist, RepeatMode::None)
+        let next = state.next_song_index(playlist_size);
+        assert_eq!(next, None);
+    }
+
+    #[test]
+    fn test_next_song_repeat_playlist() {
+        let mut state = PlaybackState::default();
+        state.repeat_mode = RepeatMode::Playlist;
+        let playlist_size = 3;
+
+        state.current_song_index = 2; // Last song
+
+        // 2 -> 0 (Wrap around)
+        let next = state.next_song_index(playlist_size);
+        assert_eq!(next, Some(0));
+    }
+
+    #[test]
+    fn test_next_song_repeat_single() {
+        let mut state = PlaybackState::default();
+        state.repeat_mode = RepeatMode::Single;
+        let playlist_size = 3;
+
+        state.current_song_index = 1;
+
+        // 1 -> 1
+        let next = state.next_song_index(playlist_size);
+        assert_eq!(next, Some(1));
+    }
+
+    #[test]
+    fn test_shuffle_logic() {
+        let mut state = PlaybackState::default();
+        let playlist_size = 5;
+
+        // Enable shuffle
+        state.toggle_shuffle(playlist_size);
+        assert!(state.shuffle);
+        assert_eq!(state.shuffle_queue.len(), 4); // Should exclude current song (index 0)
+
+        // Check that all other indices are present
+        let mut indices: Vec<usize> = state.shuffle_queue.iter().cloned().collect();
+        indices.push(state.current_song_index);
+        indices.sort();
+        assert_eq!(indices, vec![0, 1, 2, 3, 4]);
+
+        // Consume queue
+        while let Some(next) = state.next_song_index(playlist_size) {
+            state.current_song_index = next;
+        }
+
+        // Queue should be empty now (RepeatMode::None)
+        assert!(state.shuffle_queue.is_empty());
+    }
+
+    #[test]
+    fn test_shuffle_repeat_playlist() {
+        let mut state = PlaybackState::default();
+        state.repeat_mode = RepeatMode::Playlist;
+        let playlist_size = 3;
+
+        state.toggle_shuffle(playlist_size);
+
+        // Consume all songs
+        let first = state.next_song_index(playlist_size).unwrap();
+        state.current_song_index = first;
+        let second = state.next_song_index(playlist_size).unwrap();
+        state.current_song_index = second;
+
+        // Queue empty, should regenerate
+        assert!(state.shuffle_queue.is_empty());
+
+        let third = state.next_song_index(playlist_size);
+        assert!(third.is_some());
+        // Queue should have been regenerated (size - 1 because current is removed)
+        assert_eq!(state.shuffle_queue.len(), 1);
+    }
+}

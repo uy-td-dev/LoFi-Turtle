@@ -35,6 +35,7 @@ impl Playlist {
 
 
     /// Get a display name for the playlist
+    #[allow(dead_code)]
     pub fn display_name(&self) -> String {
         format!("{} ({} songs)", self.name, self.song_count())
     }

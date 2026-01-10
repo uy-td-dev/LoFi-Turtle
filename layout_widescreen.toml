@@ -1,0 +1,252 @@
+# LoFi Turtle Widescreen Layout Configuration
+# Optimized for larger terminal windows (160x40+)
+
+version = "1.0"
+name = "widescreen"
+description = "Full-featured layout for large terminals with all widgets visible"
+
+# Theme configuration
+[theme]
+name = "widescreen_synthwave"
+
+[theme.colors]
+primary = "#ff00ff"
+secondary = "#00ffff"
+background = "#0a0a0a"
+foreground = "#ffffff"
+border = "#ff00ff"
+highlight = "#ffff00"
+error = "#ff0080"
+success = "#00ff80"
+playing = "#00ff00"
+paused = "#ffff00"
+progress = "#8000ff"
+
+[theme.borders]
+style = "thick"
+color = "#ff00ff"
+
+# Layout settings
+[settings]
+refresh_rate_ms = 100  # Higher refresh rate for smooth animations
+animation_enabled = true
+
+[settings.responsive_breakpoints]
+small = 120
+medium = 160
+large = 200
+
+# Full widget set for widescreen layout
+[[widgets]]
+name = "sidebar"
+widget_type = "sidebar"
+position = "left"
+size = { percentage = 20 }
+visible = true
+border = true
+title = "🎵 Library"
+
+[widgets.style]
+fg_color = "white"
+bg_color = "black"
+border_color = "#ff00ff"
+highlight_color = "#ffff00"
+selected_color = "#00ffff"
+
+[[widgets]]
+name = "playlist_view"
+widget_type = "playlist_view"
+position = "center"
+size = { percentage = 40 }
+visible = true
+border = true
+title = "📂 Current Playlist"
+
+[widgets.style]
+fg_color = "white"
+bg_color = "black"
+border_color = "#00ffff"
+highlight_color = "#ffff00"
+selected_color = "#ff00ff"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "right"
+size = { percentage = 25 }
+visible = true
+border = true
+title = "🎧 Now Playing"
+
+[widgets.style]
+fg_color = "white"
+bg_color = "black"
+border_color = "#00ff80"
+highlight_color = "#00ff00"
+selected_color = "#ffff00"
+
+[[widgets]]
+name = "album_art"
+widget_type = "album_art"
+position = "right"
+size = { percentage = 15 }
+visible = true
+border = true
+title = "🎨 Album Art"
+
+[widgets.style]
+fg_color = "white"
+bg_color = "black"
+border_color = "#ff0080"
+
+[[widgets]]
+name = "waveform"
+widget_type = "waveform"
+position = "top"
+size = { length = 6 }
+visible = true
+border = true
+title = "🌊 Audio Waveform"
+
+[widgets.style]
+fg_color = "#00ff80"
+bg_color = "black"
+border_color = "#00ff80"
+
+[[widgets]]
+name = "search_box"
+widget_type = "search_box"
+position = "top"
+size = { length = 3 }
+visible = false  # Hidden by default, shown when searching
+border = true
+title = "🔍 Search"
+
+[widgets.style]
+fg_color = "white"
+bg_color = "black"
+border_color = "#ffff00"
+highlight_color = "#ffff00"
+
+[[widgets]]
+name = "progress_bar"
+widget_type = "progress_bar"
+position = "bottom"
+size = { length = 4 }
+visible = true
+border = true
+title = "Progress"
+
+[widgets.style]
+fg_color = "#8000ff"
+bg_color = "black"
+highlight_color = "#ff00ff"
+
+[[widgets]]
+name = "volume_control"
+widget_type = "volume_control"
+position = "bottom"
+size = { length = 2 }
+visible = true
+border = true
+title = "🔊 Volume"
+
+[widgets.style]
+fg_color = "#ffff00"
+bg_color = "black"
+highlight_color = "#ff00ff"
+
+[[widgets]]
+name = "status_bar"
+widget_type = "status_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+[widgets.style]
+fg_color = "white"
+bg_color = "black"
+highlight_color = "#00ffff"
+
+# Extended keybindings for widescreen
+[keybindings]
+# Playback controls
+"space" = "toggle_play"
+"n" = "next_track"
+"p" = "previous_track"
+"s" = "toggle_shuffle"
+"r" = "toggle_repeat"
+"m" = "toggle_mute"
+
+# Volume controls
+"+" = "volume_up"
+"-" = "volume_down"
+"ctrl+up" = "volume_up"
+"ctrl+down" = "volume_down"
+
+# Navigation
+"up" = "move_up"
+"down" = "move_down"
+"left" = "seek_backward"
+"right" = "seek_forward"
+"home" = "go_to_start"
+"end" = "go_to_end"
+"page_up" = "page_up"
+"page_down" = "page_down"
+
+# Interface controls
+"tab" = "switch_focus"
+"shift+tab" = "switch_focus_reverse"
+"enter" = "select"
+"esc" = "back"
+"backspace" = "back"
+
+# Search and filter
+"/" = "search"
+"?" = "search_reverse"
+"ctrl+f" = "filter"
+"ctrl+g" = "find_next"
+
+# Layout controls
+"f1" = "help"
+"f2" = "toggle_sidebar"
+"f3" = "toggle_album_art"
+"f4" = "toggle_waveform"
+"f5" = "reload_layout"
+"f6" = "switch_theme"
+"f11" = "toggle_fullscreen"
+"f12" = "toggle_debug"
+
+# Application controls
+"q" = "quit"
+"ctrl+c" = "quit"
+"ctrl+r" = "refresh_library"
+"ctrl+s" = "save_playlist"
+"ctrl+o" = "open_playlist"
+"ctrl+n" = "new_playlist"
+
+# Advanced controls
+"1" = "switch_to_library"
+"2" = "switch_to_playlists"
+"3" = "switch_to_queue"
+"4" = "switch_to_history"
+"5" = "switch_to_favorites"
+"6" = "switch_to_radio"
+"7" = "switch_to_podcasts"
+"8" = "switch_to_settings"
+
+# Playlist management
+"a" = "add_to_playlist"
+"d" = "remove_from_playlist"
+"f" = "add_to_favorites"
+"u" = "remove_from_favorites"
+"i" = "show_info"
+"l" = "show_lyrics"
+"e" = "edit_metadata"
+
+# Quick actions
+"ctrl+a" = "select_all"
+"ctrl+d" = "deselect_all"
+"ctrl+i" = "invert_selection"
+"delete" = "delete_selected"
