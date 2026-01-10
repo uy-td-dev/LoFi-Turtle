@@ -1,8 +1,7 @@
 use crate::commands::Command;
-use crate::config::Config;
+use crate::config::{Config, LayoutConfig};
 use crate::error::Result;
 use crate::services::TuiService;
-use async_trait::async_trait;
 
 /// Command to start the interactive music player
 pub struct PlayCommand;
@@ -13,14 +12,18 @@ impl PlayCommand {
     }
 }
 
-#[async_trait]
 impl Command for PlayCommand {
-    async fn execute(&self, config: &Config) -> Result<()> {
-        log::info!("Starting interactive music player...");
+    fn execute(&self, config: &Config) -> Result<()> {
+        // Use default layout config for backward compatibility
+        self.execute_with_layout(config, &LayoutConfig::default())
+    }
+    
+    fn execute_with_layout(&self, config: &Config, layout_config: &LayoutConfig) -> Result<()> {
+        log::info!("Starting interactive music player with layout: {}", layout_config.name);
         
-        // Initialize and run the TUI service
-        let mut tui_service = TuiService::new(config)?;
-        tui_service.run().await
+        // Initialize and run the TUI service with layout config
+        let mut tui_service = TuiService::new(config, layout_config)?;
+        tui_service.run()
     }
 
     fn description(&self) -> &'static str {

@@ -12,6 +12,25 @@ impl Database {
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
         let conn = Connection::open(db_path)
             .map_err(LofiTurtleError::Database)?;
+
+        // Enable WAL mode for better concurrency and performance
+        conn.pragma_update(None, "journal_mode", "WAL")
+            .map_err(LofiTurtleError::Database)?;
+
+        // Set synchronous to NORMAL for better write performance while maintaining safety
+        conn.pragma_update(None, "synchronous", "NORMAL")
+            .map_err(LofiTurtleError::Database)?;
+
+        let db = Self { conn };
+        db.create_tables()?;
+        Ok(db)
+    }
+
+    /// Create an in-memory database for testing
+    #[cfg(test)]
+    pub fn new_in_memory() -> Result<Self> {
+        let conn = Connection::open_in_memory()
+            .map_err(LofiTurtleError::Database)?;
         
         let db = Self { conn };
         db.create_tables()?;
@@ -77,6 +96,34 @@ impl Database {
         Ok(())
     }
 
+    /// Insert multiple songs in a single transaction for better performance
+    pub fn insert_songs_bulk(&mut self, songs: &[Song]) -> Result<usize> {
+        let tx = self.conn.transaction().map_err(LofiTurtleError::Database)?;
+        let mut count = 0;
+
+        {
+            let mut stmt = tx.prepare(
+                "INSERT OR IGNORE INTO songs (id, path, title, artist, album, duration)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)"
+            ).map_err(LofiTurtleError::Database)?;
+
+            for song in songs {
+                stmt.execute(params![
+                    song.id,
+                    song.path,
+                    song.title,
+                    song.artist,
+                    song.album,
+                    song.duration as i64
+                ]).map_err(LofiTurtleError::Database)?;
+                count += 1;
+            }
+        }
+
+        tx.commit().map_err(LofiTurtleError::Database)?;
+        Ok(count)
+    }
+
     pub fn get_all_songs(&self) -> Result<Vec<Song>> {
         let mut stmt = self.conn.prepare(
             "SELECT id, path, title, artist, album, duration FROM songs ORDER BY title"
@@ -139,6 +186,7 @@ impl Database {
     }
 
     /// Insert or update a song, returning true if it was newly inserted
+    #[allow(dead_code)]
     pub fn insert_or_update_song(&self, song: &Song) -> Result<bool> {
         let was_new = !self.song_exists(&song.path)?;
         self.insert_song(song)?;
@@ -358,5 +406,95 @@ impl Database {
             .map_err(LofiTurtleError::Database)?;
         
         Ok(exists)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_song_operations() {
+        let db = Database::new_in_memory().unwrap();
+
+        let song = Song::new(
+            "/path/to/song.mp3".to_string(),
+            "Title".to_string(),
+            "Artist".to_string(),
+            "Album".to_string(),
+            180,
+        );
+
+        // Test insert
+        db.insert_song(&song).unwrap();
+        assert!(db.song_exists(&song.path).unwrap());
+
+        // Test get all
+        let songs = db.get_all_songs().unwrap();
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].title, "Title");
+
+        // Test duplicate insert (should ignore)
+        db.insert_song(&song).unwrap();
+        let songs = db.get_all_songs().unwrap();
+        assert_eq!(songs.len(), 1);
+    }
+
+    #[test]
+    fn test_playlist_operations() {
+        let db = Database::new_in_memory().unwrap();
+
+        let song1 = Song::new("s1.mp3".to_string(), "T1".to_string(), "A".to_string(), "Al".to_string(), 100);
+        let song2 = Song::new("s2.mp3".to_string(), "T2".to_string(), "A".to_string(), "Al".to_string(), 200);
+
+        db.insert_song(&song1).unwrap();
+        db.insert_song(&song2).unwrap();
+
+        // Create playlist
+        let mut playlist = Playlist::new("My Playlist".to_string(), None);
+        playlist.song_ids = vec![song1.id.clone(), song2.id.clone()];
+
+        db.create_playlist(&playlist).unwrap();
+
+        // Verify playlist exists
+        assert!(db.playlist_exists("My Playlist").unwrap());
+
+        // Verify songs in playlist
+        let songs = db.get_playlist_songs(&playlist.id).unwrap();
+        assert_eq!(songs.len(), 2);
+        assert_eq!(songs[0].title, "T1");
+        assert_eq!(songs[1].title, "T2");
+
+        // Remove song
+        db.remove_song_from_playlist(&playlist.id, &song1.id).unwrap();
+        let songs = db.get_playlist_songs(&playlist.id).unwrap();
+        assert_eq!(songs.len(), 1);
+        assert_eq!(songs[0].title, "T2");
+
+        // Delete playlist
+        db.delete_playlist(&playlist.id).unwrap();
+        assert!(!db.playlist_exists("My Playlist").unwrap());
+    }
+
+    #[test]
+    fn test_bulk_insert() {
+        let mut db = Database::new_in_memory().unwrap();
+        let mut songs = Vec::new();
+
+        for i in 0..10 {
+            songs.push(Song::new(
+                format!("song{}.mp3", i),
+                format!("Title {}", i),
+                "Artist".to_string(),
+                "Album".to_string(),
+                100,
+            ));
+        }
+
+        let count = db.insert_songs_bulk(&songs).unwrap();
+        assert_eq!(count, 10);
+
+        let all_songs = db.get_all_songs().unwrap();
+        assert_eq!(all_songs.len(), 10);
     }
 }

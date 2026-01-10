@@ -1,10 +1,3 @@
-// Clean Architecture modules
-mod domain;
-mod application;
-mod infrastructure;
-mod shared;
-
-// Legacy modules (to be refactored)
 mod art;
 mod audio;
 mod cli;
@@ -23,8 +16,7 @@ use config::Config;
 use error::{LofiTurtleError, Result};
 
 /// Main entry point for the LofiTurtle music player
-#[tokio::main]
-async fn main() {
+fn main() {
     // Initialize logging
     env_logger::init();
 
@@ -32,14 +24,14 @@ async fn main() {
     let cli = Cli::parse();
 
     // Run application with proper error handling
-    if let Err(error) = run_application(cli).await {
+    if let Err(error) = run_application(cli) {
         display_error(&error);
         std::process::exit(1);
     }
 }
 
 /// Run the application with proper error handling
-async fn run_application(cli: Cli) -> Result<()> {
+fn run_application(cli: Cli) -> Result<()> {
     // Create configuration from CLI arguments
     let config = Config::from_cli(&cli)?;
 
@@ -48,7 +40,7 @@ async fn run_application(cli: Cli) -> Result<()> {
         Some(command) => {
             // Execute the specified command
             let cmd = CommandFactory::create_command(command);
-            cmd.execute(&config).await
+            cmd.execute(&config)
         }
         None => {
             // Default behavior: check if CLI mode is requested
@@ -61,7 +53,7 @@ async fn run_application(cli: Cli) -> Result<()> {
             } else {
                 // Default behavior: start the interactive music player (TUI mode)
                 let play_command = commands::PlayCommand::new();
-                play_command.execute(&config).await
+                play_command.execute(&config)
             }
         }
     }

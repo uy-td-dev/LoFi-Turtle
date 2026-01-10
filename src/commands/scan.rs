@@ -2,81 +2,45 @@ use crate::commands::Command;
 use crate::config::Config;
 use crate::error::Result;
 use crate::library::{Database, MusicScanner};
-use async_trait::async_trait;
+use std::time::Instant;
 
-/// Command to scan music library and update database
 pub struct ScanCommand {
-    force_rescan: bool,
+    force: bool,
 }
 
 impl ScanCommand {
-    pub fn new(force_rescan: bool) -> Self {
-        Self { force_rescan }
+    pub fn new(force: bool) -> Self {
+        Self { force }
     }
 }
 
-#[async_trait]
 impl Command for ScanCommand {
-    async fn execute(&self, config: &Config) -> Result<()> {
-        log::info!("Scanning music library at: {}", config.music_dir.display());
-
-        let database = Database::new(&config.database_path)?;
-        let scanner = MusicScanner::new();
-
+    fn execute(&self, config: &Config) -> Result<()> {
         println!("Scanning music directory: {}", config.music_dir.display());
+        let start = Instant::now();
 
-        let mut files_to_scan = Vec::new();
-        scanner.scan_directory(&config.music_dir, &mut |path| {
-            files_to_scan.push(path);
-        })?;
+        let mut database = Database::new(&config.database_path)?;
 
-        println!(
-            "Found {} songs. Updating database...",
-            files_to_scan.len()
-        );
-
-        if self.force_rescan {
-            println!("Force rescan enabled - clearing existing database entries...");
+        if self.force {
+            println!("Force scan enabled. Clearing existing database...");
             database.clear_all_songs()?;
         }
 
-        let mut added_count = 0;
-        let mut updated_count = 0;
-        let mut error_count = 0;
+        let scanner = MusicScanner::new();
+        let songs = scanner.scan_directory(&config.music_dir)?;
 
-        for path in &files_to_scan {
-            match scanner.extract_metadata(path) {
-                Ok(song) => match database.insert_or_update_song(&song) {
-                    Ok(was_new) => {
-                        if was_new {
-                            added_count += 1;
-                        } else {
-                            updated_count += 1;
-                        }
-                    }
-                    Err(e) => {
-                        log::warn!("Failed to insert song {}: {}", song.path, e);
-                        error_count += 1;
-                    }
-                },
-                Err(e) => {
-                    log::warn!("Failed to extract metadata from {:?}: {}", path, e);
-                    error_count += 1;
-                }
-            }
-        }
+        println!("Found {} songs. Updating database...", songs.len());
 
-        println!("Scan completed:");
-        println!("  - Added: {} new songs", added_count);
-        println!("  - Updated: {} existing songs", updated_count);
-        if error_count > 0 {
-            println!("  - Errors: {} songs failed to process", error_count);
-        }
+        // Use bulk insert for better performance
+        let count = database.insert_songs_bulk(&songs)?;
+
+        let duration = start.elapsed();
+        println!("Scan completed in {:.2?}. Added/Updated {} songs.", duration, count);
 
         Ok(())
     }
 
     fn description(&self) -> &'static str {
-        "Scan music library and update database"
+        "Scan music directory and update the library database"
     }
 }

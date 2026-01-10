@@ -3,7 +3,7 @@ use crate::error::{LofiTurtleError, Result};
 use lofty::prelude::*;
 use lofty::probe::Probe;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct MusicScanner;
 
@@ -12,19 +12,15 @@ impl MusicScanner {
         Self
     }
 
-    pub fn scan_directory<P: AsRef<Path>>(
-        &self,
-        dir_path: P,
-        on_file_found: &mut dyn FnMut(PathBuf),
-    ) -> Result<()> {
-        self.scan_recursive(dir_path.as_ref(), on_file_found)
+    /// Scan directory and return a list of songs
+    /// This version collects all songs into a vector
+    pub fn scan_directory<P: AsRef<Path>>(&self, dir_path: P) -> Result<Vec<Song>> {
+        let mut songs = Vec::new();
+        self.scan_recursive(dir_path.as_ref(), &mut songs)?;
+        Ok(songs)
     }
 
-    fn scan_recursive(
-        &self,
-        dir: &Path,
-        on_file_found: &mut dyn FnMut(PathBuf),
-    ) -> Result<()> {
+    fn scan_recursive(&self, dir: &Path, songs: &mut Vec<Song>) -> Result<()> {
         let entries = fs::read_dir(dir).map_err(|e| LofiTurtleError::FileSystem(e))?;
 
         for entry in entries {
@@ -32,11 +28,14 @@ impl MusicScanner {
             let path = entry.path();
 
             if path.is_dir() {
-                if let Err(e) = self.scan_recursive(&path, on_file_found) {
+                if let Err(e) = self.scan_recursive(&path, songs) {
                     log::warn!("Failed to scan directory {}: {}", path.display(), e);
                 }
             } else if self.is_audio_file(&path) {
-                on_file_found(path);
+                match self.extract_metadata(&path) {
+                    Ok(song) => songs.push(song),
+                    Err(e) => log::warn!("Failed to extract metadata from {}: {}", path.display(), e),
+                }
             }
         }
 

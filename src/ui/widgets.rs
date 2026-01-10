@@ -1,67 +1,110 @@
 use crate::ui::{App, InputMode, ActivePanel, ViewMode};
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Margin},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{
-        Block, Borders, Gauge, List, ListItem, Paragraph, Wrap, Clear,
+        Block, BorderType, Borders, Gauge, List, ListItem, Paragraph, Clear,
     },
     Frame,
 };
 
+/// Helper to get color from hex string or name, defaulting to a fallback
+fn get_color(color_str: Option<&String>, fallback: Color) -> Color {
+    if let Some(c) = color_str {
+        match c.to_lowercase().as_str() {
+            "black" => Color::Black,
+            "red" => Color::Red,
+            "green" => Color::Green,
+            "yellow" => Color::Yellow,
+            "blue" => Color::Blue,
+            "magenta" => Color::Magenta,
+            "cyan" => Color::Cyan,
+            "gray" | "grey" => Color::Gray,
+            "dark_gray" => Color::DarkGray,
+            "white" => Color::White,
+            s if s.starts_with('#') => {
+                if let Ok(rgb) = u32::from_str_radix(&s[1..], 16) {
+                    Color::Rgb(((rgb >> 16) & 0xFF) as u8, ((rgb >> 8) & 0xFF) as u8, (rgb & 0xFF) as u8)
+                } else {
+                    fallback
+                }
+            }
+            _ => fallback,
+        }
+    } else {
+        fallback
+    }
+}
+
 pub fn draw_ui(f: &mut Frame, app: &mut App) {
-    // Main layout: search bar, content area, control panel
+    // Extract theme colors for easy access
+    let theme = &app.layout_config.theme;
+    let colors = theme.colors.as_ref();
+    
+    let primary_color = get_color(colors.and_then(|c| c.get("primary")), Color::Cyan);
+    let secondary_color = get_color(colors.and_then(|c| c.get("secondary")), Color::Magenta);
+    let _bg_color = get_color(colors.and_then(|c| c.get("background")), Color::Reset);
+    let border_color = get_color(colors.and_then(|c| c.get("border")), Color::DarkGray);
+    let highlight_color = get_color(colors.and_then(|c| c.get("highlight")), Color::Yellow);
+
+    // Main layout
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),  // Search bar
-            Constraint::Min(0),     // Content area
-            Constraint::Length(6),  // Enhanced control panel
+            Constraint::Length(3),  // Header / Search
+            Constraint::Min(0),     // Main Content
+            Constraint::Length(7),  // Player Controls (taller for better look)
         ])
         .split(f.area());
 
-    // Content area layout: playlists, songs, and optionally album art
-    let (content_chunks, show_album_art) = if app.state.show_album_art {
-        // Three panels: playlist, songs, album art
-        let chunks = Layout::default()
+    // --- Header / Search Bar ---
+    draw_header(f, app, main_chunks[0], primary_color, border_color);
+
+    // --- Main Content Area ---
+    // Check visible widgets to decide layout
+    let visible_widgets: Vec<_> = app.layout_config.widgets.iter()
+        .filter(|w| w.visible)
+        .collect();
+    
+    let show_album_art = visible_widgets.iter().any(|w| w.name.contains("art"));
+
+    let content_chunks = if show_album_art {
+        Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(25), // Playlist panel
-                Constraint::Percentage(50), // Song list panel
-                Constraint::Percentage(25), // Album art panel
+                Constraint::Percentage(25), // Playlist/Library
+                Constraint::Percentage(50), // Song List
+                Constraint::Percentage(25), // Album Art & Visuals
             ])
-            .split(main_chunks[1]);
-        (chunks, true)
+            .split(main_chunks[1])
     } else {
-        // Two panels: playlist and songs (no album art)
-        let chunks = Layout::default()
+        Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(33), // Playlist panel (wider)
-                Constraint::Percentage(67), // Song list panel (wider)
+                Constraint::Percentage(30), // Playlist
+                Constraint::Percentage(70), // Songs
             ])
-            .split(main_chunks[1]);
-        (chunks, false)
+            .split(main_chunks[1])
     };
 
-    // Draw all panels
-    draw_search_bar(f, app, main_chunks[0]);
-    draw_playlist_panel(f, app, content_chunks[0]);
-    draw_song_list_panel(f, app, content_chunks[1]);
+    // Draw Panels
+    draw_playlist_panel(f, app, content_chunks[0], primary_color, secondary_color, border_color);
     
-    // Only draw album art panel if enabled
-    if show_album_art && content_chunks.len() > 2 {
-        draw_album_art_panel(f, app, content_chunks[2]);
+    if content_chunks.len() > 1 {
+        draw_song_list_panel(f, app, content_chunks[1], primary_color, highlight_color, border_color);
     }
     
-    draw_enhanced_control_panel(f, app, main_chunks[2]);
-    
-    // Draw modal dialogs if in input modes
-    match app.state.input_mode {
-        InputMode::PlaylistCreate | InputMode::PlaylistEdit => {
-            draw_playlist_input_modal(f, app);
-        }
-        _ => {}
+    if content_chunks.len() > 2 {
+        draw_visual_panel(f, app, content_chunks[2], secondary_color, border_color);
+    }
+
+    // --- Player Controls ---
+    draw_player_controls(f, app, main_chunks[2], primary_color, secondary_color, border_color);
+
+    // --- Modals ---
+    if matches!(app.state.input_mode, InputMode::PlaylistCreate | InputMode::PlaylistEdit) {
+        draw_input_modal(f, app, highlight_color);
     }
 
     // Draw scanning modal on top if scanning is in progress
@@ -107,334 +150,318 @@ fn draw_scanning_modal(f: &mut Frame, app: &App) {
     f.render_widget(progress_bar, layout[2]);
 }
 
-fn draw_search_bar(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+fn draw_header(f: &mut Frame, app: &App, area: Rect, primary: Color, border: Color) {
     let title = match &app.state.view_mode {
-        ViewMode::Library => "Search Library".to_string(),
-        ViewMode::Playlist(name) => format!("Search Playlist: {}", name),
+        ViewMode::Library => " 🐢 Lofi Turtle Library ",
+        ViewMode::Playlist(_name) => " 🐢 Playlist View ",
     };
-    
-    let search_block = Block::default()
-        .borders(Borders::ALL)
-        .title(title)
-        .border_style(match app.state.input_mode {
-            InputMode::Search => Style::default().fg(Color::Yellow),
-            _ => Style::default(),
-        });
 
-    let mut textarea = app.state.search_textarea.clone();
-    textarea.set_block(search_block);
-    f.render_widget(&textarea, area);
-}
-
-fn draw_playlist_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let playlists: Vec<ListItem> = app
-        .state
-        .playlists
-        .iter()
-        .enumerate()
-        .map(|(i, playlist)| {
-            let song_count = format!(" ({} songs)", playlist.song_count());
-            let content = if i == app.state.selected_playlist_index && app.state.active_panel == ActivePanel::Playlists {
-                Line::from(vec![
-                    Span::styled(">> ", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                    Span::styled(&playlist.name, Style::default().fg(Color::Green).add_modifier(Modifier::BOLD)),
-                    Span::styled(song_count, Style::default().fg(Color::Gray)),
-                ])
-            } else {
-                Line::from(vec![
-                    Span::raw("   "),
-                    Span::raw(&playlist.name),
-                    Span::styled(song_count, Style::default().fg(Color::Gray)),
-                ])
-            };
-            ListItem::new(content)
-        })
-        .collect();
-
-    // Add "Library" option at the top
-    let mut all_items = vec![ListItem::new(
-        if matches!(app.state.view_mode, ViewMode::Library) && app.state.active_panel == ActivePanel::Playlists {
-            Line::from(vec![
-                Span::styled(">> ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-                Span::styled("📚 All Songs", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-            ])
-        } else {
-            Line::from(vec![
-                Span::raw("   "),
-                Span::styled("📚 All Songs", Style::default().fg(Color::Cyan)),
-            ])
-        }
-    )];
-    all_items.extend(playlists);
-
-    let playlist_list = List::new(all_items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Playlists")
-                .border_style(match app.state.active_panel {
-                    ActivePanel::Playlists => Style::default().fg(Color::Green),
-                    _ => Style::default(),
-                })
-        );
-
-    f.render_widget(playlist_list, area);
-}
-
-fn draw_song_list_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let songs: Vec<ListItem> = app
-        .state
-        .filtered_songs
-        .iter()
-        .enumerate()
-        .map(|(i, song)| {
-            let display_name = song.display_name();
-            // Performance optimization: Use cached duration string
-            let duration_text = format!(" [{}]", song.duration_formatted());
-            let content = if i == app.state.selected_song_index && app.state.active_panel == ActivePanel::Songs {
-                Line::from(vec![
-                    Span::styled(">> ", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                    Span::styled(display_name, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
-                    Span::styled(duration_text, Style::default().fg(Color::Gray)),
-                ])
-            } else {
-                Line::from(vec![
-                    Span::raw("   "),
-                    Span::raw(display_name),
-                    Span::styled(duration_text, Style::default().fg(Color::Gray)),
-                ])
-            };
-            ListItem::new(content)
-        })
-        .collect();
-
-    let title = match &app.state.view_mode {
-        ViewMode::Library => format!("Songs ({}/{})", 
-            app.state.filtered_songs.len(), 
-            app.state.songs.len()
-        ),
-        ViewMode::Playlist(name) => format!("{} ({}/{})", 
-            name,
-            app.state.filtered_songs.len(), 
-            app.state.songs.len()
-        ),
+    let border_style = if matches!(app.state.input_mode, InputMode::Search) {
+        Style::default().fg(primary).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(border)
     };
-    
-    let songs_list = List::new(songs)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(title)
-                .border_style(match app.state.active_panel {
-                    ActivePanel::Songs => Style::default().fg(Color::Yellow),
-                    _ => Style::default(),
-                })
-        );
 
-    f.render_widget(songs_list, area);
-}
-
-fn draw_album_art_panel(f: &mut Frame, app: &mut App, area: ratatui::layout::Rect) {
     let block = Block::default()
         .borders(Borders::ALL)
-        .title("Album Art")
-        .border_style(match app.state.active_panel {
-            ActivePanel::AlbumArt => Style::default().fg(Color::Magenta),
-            _ => Style::default(),
-        });
+        .border_type(BorderType::Rounded)
+        .border_style(border_style)
+        .title(Span::styled(title, Style::default().fg(primary).add_modifier(Modifier::BOLD)));
 
-    if app.state.show_album_art {
-        // Create a constrained area for 80% width within the panel (CSS formula)
-        let inner_area = area.inner(Margin { vertical: 1, horizontal: 1 });
-        let art_width = ((inner_area.width as f32) * 0.8) as u16;
-        let art_height = inner_area.height;
-        
-        // Center the constrained area within the panel
-        let x_offset = (inner_area.width.saturating_sub(art_width)) / 2;
-        let constrained_area = ratatui::layout::Rect {
-            x: inner_area.x + x_offset,
-            y: inner_area.y,
-            width: art_width,
-            height: art_height,
+    if matches!(app.state.input_mode, InputMode::Search) {
+        let mut textarea = app.state.search_textarea.clone();
+        textarea.set_block(block);
+        textarea.set_style(Style::default().fg(Color::White));
+        textarea.set_cursor_style(Style::default().bg(primary));
+        f.render_widget(&textarea, area);
+    } else {
+        // Just show the title or a hint when not searching
+        let hint = if !app.state.search_query.is_empty() {
+            format!("🔍 Filter: {}", app.state.search_query)
+        } else {
+            "Press '/' to search".to_string()
         };
 
-        // Check if we need to regenerate album art with new dimensions
-        let current_song = app.get_current_song().cloned();
-        if let Some(song) = current_song {
-            // Update album art with constrained dimensions (80% width)
-            if let Ok(updated_art) = app.update_album_art_with_dimensions(&song, constrained_area.width, constrained_area.height) {
-                if let Some(ref art) = updated_art {
-                    let art_paragraph = Paragraph::new(art.clone())
-                        .alignment(Alignment::Center)
-                        .wrap(Wrap { trim: true });
-                    f.render_widget(art_paragraph, constrained_area);
-                    
-                    // Draw the main block border
-                    f.render_widget(block, area);
-                    return;
-                }
-            }
-        }
-        
-        // Fallback to existing art or placeholder
-        if let Some(ref art) = app.state.current_album_art {
-            let art_paragraph = Paragraph::new(art.clone())
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true });
-            f.render_widget(art_paragraph, constrained_area);
-            f.render_widget(block, area);
-        } else {
-            // Generate placeholder with constrained dimensions (80% width)
-            let placeholder_art = app.generate_album_art_placeholder(constrained_area.width, constrained_area.height);
-            let placeholder = Paragraph::new(placeholder_art)
-                .alignment(Alignment::Center)
-                .style(Style::default().fg(Color::Gray));
-            f.render_widget(placeholder, constrained_area);
-            f.render_widget(block, area);
-        }
-    } else {
-        let disabled_msg = Paragraph::new("Album art\ndisabled\n\nPress 'a' to\nenable")
+        let p = Paragraph::new(hint)
             .block(block)
-            .alignment(Alignment::Center)
-            .style(Style::default().fg(Color::DarkGray));
-        f.render_widget(disabled_msg, area);
+            .style(Style::default().fg(Color::DarkGray))
+            .alignment(Alignment::Left);
+        f.render_widget(p, area);
     }
 }
 
-fn draw_enhanced_control_panel(f: &mut Frame, app: &App, area: ratatui::layout::Rect) {
-    let control_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(1),  // Current song info
-            Constraint::Length(1),
-            Constraint::Length(1),// Progress bar
-            Constraint::Length(1),  // Controls info
-            Constraint::Length(1),  // Status,
-            Constraint::Length(1)// Playback modes (shuffle/repeat)
-        ])
-        .split(area.inner(Margin { vertical: 1, horizontal: 1 }));
-
-    // Current song info
-    let current_song_text = if let Some(song) = app.get_current_song() {
-        format!("♪ {} - {}", song.title, song.artist)
+fn draw_playlist_panel(f: &mut Frame, app: &App, area: Rect, primary: Color, secondary: Color, border: Color) {
+    let is_active = app.state.active_panel == ActivePanel::Playlists;
+    let border_style = if is_active {
+        Style::default().fg(primary).add_modifier(Modifier::BOLD)
     } else {
-        "No song playing".to_string()
+        Style::default().fg(border)
     };
 
-    let current_song = Paragraph::new(current_song_text)
-        .style(Style::default().fg(Color::Cyan))
-        .alignment(Alignment::Center);
-    f.render_widget(current_song, control_chunks[0]);
+    let items: Vec<ListItem> = app.state.playlists.iter().enumerate().map(|(i, p)| {
+        let is_selected = i == app.state.selected_playlist_index && is_active;
+        let icon = if is_selected { "📂" } else { "📁" };
 
-    // Progress bar
+        let style = if is_selected {
+            Style::default().fg(primary).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Gray)
+        };
+
+        ListItem::new(Line::from(vec![
+            Span::styled(format!("{} ", icon), style),
+            Span::styled(p.name.clone(), style),
+            Span::styled(format!(" ({})", p.song_count()), Style::default().fg(Color::DarkGray)),
+        ]))
+    }).collect();
+
+    // Add "Library" at top
+    let mut all_items = vec![ListItem::new(Line::from(vec![
+        Span::styled("📚 ", Style::default().fg(secondary)),
+        Span::styled("All Music", if matches!(app.state.view_mode, ViewMode::Library) {
+            Style::default().fg(secondary).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::Gray)
+        }),
+    ]))];
+    all_items.extend(items);
+
+    let list = List::new(all_items)
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(border_style)
+            .title(" Playlists "))
+        .highlight_style(Style::default().bg(Color::DarkGray)); // Fallback highlight if needed
+
+    f.render_widget(list, area);
+}
+
+fn draw_song_list_panel(f: &mut Frame, app: &App, area: Rect, primary: Color, highlight: Color, border: Color) {
+    let is_active = app.state.active_panel == ActivePanel::Songs;
+    let border_style = if is_active {
+        Style::default().fg(primary).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(border)
+    };
+
+    let songs: Vec<ListItem> = app.state.filtered_songs.iter().enumerate().map(|(i, song)| {
+        let is_selected = i == app.state.selected_song_index && is_active;
+        let is_playing = app.get_current_song().map(|s| s.path == song.path).unwrap_or(false);
+
+        let (icon, style) = if is_playing {
+            ("▶ ", Style::default().fg(highlight).add_modifier(Modifier::BOLD))
+        } else if is_selected {
+            ("● ", Style::default().fg(primary).add_modifier(Modifier::BOLD))
+        } else {
+            ("  ", Style::default().fg(Color::Gray))
+        };
+
+        let title_width = (area.width as usize).saturating_sub(25); // Reserve space for duration/icon
+        let title = format!("{:<width$}", song.display_name(), width = title_width);
+
+        ListItem::new(Line::from(vec![
+            Span::styled(icon, style),
+            Span::styled(title, style),
+            Span::styled(song.duration_formatted(), Style::default().fg(Color::DarkGray)),
+        ]))
+    }).collect();
+
+    let title = match &app.state.view_mode {
+        ViewMode::Library => format!(" Songs ({}) ", app.state.filtered_songs.len()),
+        ViewMode::Playlist(n) => format!(" {} ({}) ", n, app.state.filtered_songs.len()),
+    };
+
+    let list = List::new(songs)
+        .block(Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(border_style)
+            .title(title));
+
+    // We handle selection rendering manually above for better control,
+    // but we need to pass a state if we want scrolling to work automatically.
+    // Since AppState handles index, we just render the list centered around selection if possible
+    // For now, simple rendering:
+
+    // Calculate scroll offset to keep selection visible
+    let height = area.height as usize - 2; // borders
+    let _offset = if app.state.selected_song_index >= height {
+        app.state.selected_song_index - height + 1
+    } else {
+        0
+    };
+
+    // Create a new list with offset (manual scrolling implementation for stateless widget)
+    // In a real app we'd use ListState, but here we just slice for simplicity or rely on ratatui's state
+    // Let's use the proper way:
+    let mut state = ratatui::widgets::ListState::default();
+    state.select(Some(app.state.selected_song_index));
+    f.render_stateful_widget(list, area, &mut state);
+}
+
+fn draw_visual_panel(f: &mut Frame, app: &mut App, area: Rect, color: Color, border: Color) {
+    let is_active = app.state.active_panel == ActivePanel::AlbumArt;
+    let border_style = if is_active {
+        Style::default().fg(color).add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(border)
+    };
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(border_style)
+        .title(" Visuals ");
+
+    let inner_area = block.inner(area);
+    f.render_widget(block, area);
+
+    // 1. Album Art (Top 70%)
+    let art_area = Rect { height: (inner_area.height as f32 * 0.7) as u16, ..inner_area };
+
+    if app.state.show_album_art {
+        // Logic to render art... reusing existing logic but simplified
+        if let Some(song) = app.get_current_song().cloned() {
+             // Try to update/get art
+             if let Ok(Some(art)) = app.update_album_art_with_dimensions(&song, art_area.width, art_area.height) {
+                 let p = Paragraph::new(art).alignment(Alignment::Center);
+                 f.render_widget(p, art_area);
+             } else {
+                 // Placeholder
+                 let p = Paragraph::new("No Art").alignment(Alignment::Center).style(Style::default().fg(Color::DarkGray));
+                 f.render_widget(p, art_area);
+             }
+        }
+    } else {
+        let p = Paragraph::new("Art Disabled\n(Press 'a')").alignment(Alignment::Center).style(Style::default().fg(Color::DarkGray));
+        f.render_widget(p, centered_rect(80, 20, art_area));
+    }
+
+    // 2. Fake Visualizer (Bottom 30%)
+    let viz_area = Rect { y: art_area.y + art_area.height, height: inner_area.height - art_area.height, ..inner_area };
+    if app.state.playback_status.state == crate::audio::PlayerState::Playing {
+        // Simple animated bars
+        let bars = " ▂▃▅▆▇█▇▆▅▃▂ ";
+        let repeated = bars.repeat(5);
+        let p = Paragraph::new(repeated)
+            .alignment(Alignment::Center)
+            .style(Style::default().fg(color));
+        f.render_widget(p, centered_rect(90, 50, viz_area));
+    }
+}
+
+fn draw_player_controls(f: &mut Frame, app: &App, area: Rect, primary: Color, secondary: Color, border: Color) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(border))
+        .title(" Now Playing ");
+
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // Title/Artist
+            Constraint::Length(1), // Progress Bar
+            Constraint::Length(1), // Time & Status
+            Constraint::Length(1), // Controls Help
+        ])
+        .margin(1)
+        .split(inner);
+
+    // 1. Song Info
+    if let Some(song) = app.get_current_song() {
+        let info = Line::from(vec![
+            Span::styled("🎵 ", Style::default().fg(secondary)),
+            Span::styled(&song.title, Style::default().fg(Color::White).add_modifier(Modifier::BOLD)),
+            Span::styled("  👤 ", Style::default().fg(secondary)),
+            Span::styled(&song.artist, Style::default().fg(Color::Gray)),
+        ]);
+        f.render_widget(Paragraph::new(info).alignment(Alignment::Center), chunks[0]);
+    } else {
+        f.render_widget(Paragraph::new("Nothing Playing").alignment(Alignment::Center).style(Style::default().fg(Color::DarkGray)), chunks[0]);
+    }
+
+    // 2. Progress Bar
     let progress = if app.state.playback_status.total_duration > 0 {
-        (app.state.playback_status.current_position as f64 / app.state.playback_status.total_duration as f64) * 100.0
+        (app.state.playback_status.current_position as f64 / app.state.playback_status.total_duration as f64).clamp(0.0, 1.0)
     } else {
         0.0
     };
 
-    let progress_label = format!(
-        "{} / {}",
+    let gauge = Gauge::default()
+        .gauge_style(Style::default().fg(primary).bg(Color::DarkGray))
+        .ratio(progress)
+        .use_unicode(true); // Uses smooth blocks
+    f.render_widget(gauge, chunks[1]);
+
+    // 3. Time & Status Icons
+    let time_str = format!("{} / {}",
         format_duration(app.state.playback_status.current_position),
         format_duration(app.state.playback_status.total_duration)
     );
 
-    let progress_bar = Gauge::default()
-        .block(Block::default().borders(Borders::NONE))
-        .gauge_style(Style::default().fg(Color::Green))
-        .percent(progress as u16)
-        .label(progress_label);
-    f.render_widget(progress_bar, control_chunks[2]);
+    let status_icon = match app.state.playback_status.state {
+        crate::audio::PlayerState::Playing => "▶",
+        crate::audio::PlayerState::Paused => "⏸",
+        crate::audio::PlayerState::Stopped => "⏹",
+    };
 
-    // Playback modes (shuffle/repeat) and volume - using enhanced PlaybackState
-    let shuffle_icon = if app.state.playback_state.shuffle { "🔀 ON" } else { "🔀 OFF" };
+    let shuffle_icon = if app.state.playback_state.shuffle { "🔀" } else { "➡" };
     let repeat_icon = match app.state.playback_state.repeat_mode {
-        crate::models::RepeatMode::None => "🔁 OFF",
-        crate::models::RepeatMode::Single => "🔂 SINGLE",
-        crate::models::RepeatMode::Playlist => "🔁 PLAYLIST",
+        crate::models::RepeatMode::None => "➡",
+        crate::models::RepeatMode::Single => "🔂",
+        crate::models::RepeatMode::Playlist => "🔁",
     };
-    
-    let volume_percent = (app.state.playback_status.volume * 100.0) as u8;
-    let volume_icon = if volume_percent == 0 {
-        "🔇"
-    } else if volume_percent < 33 {
-        "🔈"
-    } else if volume_percent < 67 {
-        "🔉"
-    } else {
-        "🔊"
-    };
-    
-    let modes_text = format!("Shuffle: {}  |  Repeat: {}  |  Volume: {} {}%", 
-                            shuffle_icon, repeat_icon, volume_icon, volume_percent);
-    let modes = Paragraph::new(modes_text)
-        .style(Style::default().fg(Color::Magenta))
-        .alignment(Alignment::Center);
-    f.render_widget(modes, control_chunks[5]);
+    let vol = (app.state.playback_status.volume * 100.0) as u8;
+    let vol_icon = if vol == 0 { "🔇" } else if vol < 50 { "🔉" } else { "🔊" };
 
-    // Controls info
-    let controls_text = match app.state.input_mode {
-        InputMode::Normal => {
-            match app.state.active_panel {
-                ActivePanel::Playlists => "hjkl/↑↓←→: Navigate | Tab: Switch panels | Enter: Select | Backspace: Back | [/]: Volume | +/-: Add/Remove songs | n: New | d: Delete | a: Toggle art | q: Quit",
-                ActivePanel::Songs => "hjkl/↑↓←→: Navigate | Tab: Switch panels | Enter: Play | Space: Play/Pause | S: Shuffle | R: Repeat | [/]: Volume | +/-: Add/Remove to playlist | Backspace: Back | /: Search | a: Toggle art | q: Quit",
-                ActivePanel::AlbumArt => "hjkl/↑↓←→: Navigate | Tab: Switch panels | [/]: Volume | Backspace: Back | a: Toggle album art | q: Quit",
-            }
-        },
-        InputMode::Search => "Type to search | Esc: Exit search | Enter: Play selected",
-        InputMode::PlaylistCreate => "Enter playlist name | Enter: Create | Esc: Cancel",
-        InputMode::PlaylistEdit => "Edit playlist name | Enter: Save | Esc: Cancel",
-    };
+    let status_line = Line::from(vec![
+        Span::styled(format!("{}  ", time_str), Style::default().fg(Color::Gray)),
+        Span::styled(format!("{} ", status_icon), Style::default().fg(primary).add_modifier(Modifier::BOLD)),
+        Span::raw("   "),
+        Span::styled(format!("{} ", shuffle_icon), if app.state.playback_state.shuffle { Style::default().fg(secondary) } else { Style::default().fg(Color::DarkGray) }),
+        Span::styled(format!("{} ", repeat_icon), if app.state.playback_state.repeat_mode != crate::models::RepeatMode::None { Style::default().fg(secondary) } else { Style::default().fg(Color::DarkGray) }),
+        Span::raw("   "),
+        Span::styled(format!("{} {}%", vol_icon, vol), Style::default().fg(Color::Gray)),
+    ]);
+    f.render_widget(Paragraph::new(status_line).alignment(Alignment::Center), chunks[2]);
 
-    let controls = Paragraph::new(controls_text)
-        .style(Style::default().fg(Color::Gray))
-        .alignment(Alignment::Center);
-    f.render_widget(controls, control_chunks[3]);
-
-    // Status
-    let status_text = match app.state.playback_status.state {
-        crate::audio::PlayerState::Playing => "▶ Playing",
-        crate::audio::PlayerState::Paused => "⏸ Paused",
-        crate::audio::PlayerState::Stopped => "⏹ Stopped",
-    };
-
-    let status = Paragraph::new(status_text)
-        .style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
-        .alignment(Alignment::Center);
-    f.render_widget(status, control_chunks[4]);
-
-    // Draw border around control panel
-    let control_block = Block::default()
-        .borders(Borders::ALL)
-        .title("Controls");
-    f.render_widget(control_block, area);
+    // 4. Quick Help
+    let help = Span::styled(
+        "Space:Play/Pause | Tab:Switch | /:Search | q:Quit",
+        Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)
+    );
+    f.render_widget(Paragraph::new(help).alignment(Alignment::Center), chunks[3]);
 }
 
-fn draw_playlist_input_modal(f: &mut Frame, app: &App) {
-    let area = f.area();
-    let popup_area = centered_rect(50, 20, area);
-    
-    // Clear the area
-    f.render_widget(Clear, popup_area);
+fn draw_input_modal(f: &mut Frame, app: &App, highlight: Color) {
+    let area = centered_rect(50, 20, f.area());
+    f.render_widget(Clear, area);
     
     let title = match app.state.input_mode {
-        InputMode::PlaylistCreate => "Create New Playlist",
-        InputMode::PlaylistEdit => "Edit Playlist",
-        _ => "Playlist",
+        InputMode::PlaylistCreate => " Create Playlist ",
+        InputMode::PlaylistEdit => " Edit Playlist ",
+        _ => " Input ",
     };
-    
+
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(title)
-        .border_style(Style::default().fg(Color::Yellow));
-    
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(highlight))
+        .title(title);
+
     let mut textarea = app.state.playlist_name_textarea.clone();
     textarea.set_block(block);
-    f.render_widget(&textarea, popup_area);
+    textarea.set_style(Style::default().fg(Color::White));
+    f.render_widget(&textarea, area);
 }
 
-// Helper function to create a centered rectangle
-fn centered_rect(percent_x: u16, percent_y: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
+// Utils
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
