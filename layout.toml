@@ -1,0 +1,232 @@
+## LoFi Turtle Dynamic Layout Configuration
+## This file controls the layout and appearance of your terminal music player
+## Changes to this file will be automatically reloaded without restarting the app
+#
+#version = "1.0"
+#name = "default_lofi"
+#description = "Default LoFi Turtle layout with sidebar, playlist, and now playing"
+#
+## Theme configuration
+[theme]
+name = "gruvbox"
+##
+##[theme.colors]
+##primary = "cyan"
+##secondary = "yellow"
+##background = "black"
+##foreground = "white"
+##border = "gray"
+##highlight = "bright_cyan"
+##error = "red"
+##success = "green"
+##playing = "bright_green"
+##paused = "bright_yellow"
+##progress = "blue"
+##
+##[theme.borders]
+##style = "rounded"  # Options: "rounded", "plain", "thick", "double"
+##color = "gray"
+#
+## Layout settings
+#[settings]
+#refresh_rate_ms = 250
+#animation_enabled = true
+#
+#[settings.responsive_breakpoints]
+#small = 80   # Hide some widgets on very small terminals
+#medium = 120 # Standard layout
+#large = 160  # Show additional widgets
+#
+## Widget definitions
+#[[widgets]]
+#name = "sidebar"
+#widget_type = "sidebar"
+#position = "left"
+#size = { percentage = 25 }
+#visible = true
+#border = true
+#title = "Library"
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "cyan"
+#highlight_color = "bright_cyan"
+#selected_color = "yellow"
+#
+#[[widgets]]
+#name = "playlist_view"
+#widget_type = "playlist_view"
+#position = "center"
+#size = "fill"
+#visible = true
+#border = true
+#title = "Current Playlist"
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "gray"
+#highlight_color = "cyan"
+#selected_color = "bright_yellow"
+#
+#[[widgets]]
+#name = "now_playing"
+#widget_type = "now_playing"
+#position = "right"
+#size = { percentage = 30 }
+#visible = true
+#border = true
+#title = "Now Playing"
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "green"
+#highlight_color = "bright_green"
+#selected_color = "yellow"
+#
+#[[widgets]]
+#name = "album_art"
+#widget_type = "album_art"
+#position = "right"
+#size = { length = 20 }
+#visible = true
+#border = true
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "magenta"
+#
+#[[widgets]]
+#name = "progress_bar"
+#widget_type = "progress_bar"
+#position = "bottom"
+#size = { length = 3 }
+#visible = true
+#border = false
+#
+#[widgets.style]
+#fg_color = "blue"
+#bg_color = "black"
+#highlight_color = "bright_blue"
+#
+#[[widgets]]
+#name = "status_bar"
+#widget_type = "status_bar"
+#position = "bottom"
+#size = { length = 1 }
+#visible = true
+#border = false
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#highlight_color = "cyan"
+#
+#[[widgets]]
+#name = "volume_control"
+#widget_type = "volume_control"
+#position = "bottom"
+#size = { length = 1 }
+#visible = true
+#border = false
+#
+#[widgets.style]
+#fg_color = "yellow"
+#bg_color = "black"
+#highlight_color = "bright_yellow"
+#
+#[[widgets]]
+#name = "waveform"
+#widget_type = "waveform"
+#position = "top"
+#size = { length = 5 }
+#visible = false  # Hidden by default, can be toggled
+#border = true
+#title = "Waveform"
+#
+#[widgets.style]
+#fg_color = "green"
+#bg_color = "black"
+#border_color = "green"
+#
+#[[widgets]]
+#name = "search_box"
+#widget_type = "search_box"
+#position = "top"
+#size = { length = 3 }
+#visible = false  # Hidden by default, shown when searching
+#border = true
+#title = "Search"
+#
+#[widgets.style]
+#fg_color = "white"
+#bg_color = "black"
+#border_color = "yellow"
+#highlight_color = "bright_yellow"
+#
+## Keybindings
+#[keybindings]
+## Playback controls
+#"space" = "toggle_play"
+#"n" = "next_track"
+#"p" = "previous_track"
+#"s" = "toggle_shuffle"
+#"r" = "toggle_repeat"
+#
+## Volume controls
+#"+" = "volume_up"
+#"-" = "volume_down"
+#"m" = "toggle_mute"
+#
+## Navigation
+#"up" = "move_up"
+#"down" = "move_down"
+#"left" = "seek_backward"
+#"right" = "seek_forward"
+#"home" = "go_to_start"
+#"end" = "go_to_end"
+#"page_up" = "page_up"
+#"page_down" = "page_down"
+#
+## Interface controls
+#"tab" = "switch_focus"
+#"shift+tab" = "switch_focus_reverse"
+#"enter" = "select"
+#"esc" = "back"
+#"backspace" = "back"
+#
+## Search and filter
+#"/" = "search"
+#"?" = "search_reverse"
+#"ctrl+f" = "filter"
+#
+## Layout controls
+#"f1" = "help"
+#"f2" = "toggle_sidebar"
+#"f3" = "toggle_album_art"
+#"f4" = "toggle_waveform"
+#"f5" = "reload_layout"
+#"f11" = "toggle_fullscreen"
+#
+## Application controls
+#"q" = "quit"
+#"ctrl+c" = "quit"
+#"ctrl+r" = "refresh_library"
+#"ctrl+s" = "save_playlist"
+#"ctrl+o" = "open_playlist"
+#
+## Advanced controls
+#"1" = "switch_to_library"
+#"2" = "switch_to_playlists"
+#"3" = "switch_to_queue"
+#"4" = "switch_to_history"
+#"5" = "switch_to_favorites"
+#
+#"a" = "add_to_playlist"
+#"d" = "remove_from_playlist"
+#"f" = "add_to_favorites"
+#"i" = "show_info"
+#"l" = "show_lyrics"
