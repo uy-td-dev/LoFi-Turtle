@@ -56,6 +56,10 @@ pub struct Cli {
     #[arg(long, value_name = "FILE", default_value = "layout.toml")]
     pub layout_config: PathBuf,
 
+    /// Keymap configuration file path
+    #[arg(long, value_name = "FILE", default_value = "keymap.toml")]
+    pub keymap_config: PathBuf,
+
     /// Dump complete layout configuration to file
     #[arg(long, value_name = "FILE")]
     pub dump_layout: Option<PathBuf>,

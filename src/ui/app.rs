@@ -5,6 +5,7 @@ use crate::library::Database;
 use crate::models::{Song, Playlist, PlaybackState};
 use crate::art::AlbumArtRenderer;
 use crate::ui::theme::Themes;
+use crate::ui::layout::LayoutEngine;
 use ratatui::crossterm::event::Event;
 use std::time::Instant;
 use tui_textarea::TextArea;
@@ -93,6 +94,7 @@ pub struct App {
     pub album_art_renderer: AlbumArtRenderer,
     pub persistent_settings: PersistentSettings,
     pub layout_config: LayoutConfig,
+    pub layout_engine: LayoutEngine,
 }
 
 impl App {
@@ -105,6 +107,8 @@ impl App {
         let persistent_settings = PersistentSettings::load();
         let initial_volume = persistent_settings.volume;
         
+        let layout_engine = LayoutEngine::new(layout_config.clone());
+
         let mut app = Self {
             state: AppState::default(),
             database,
@@ -112,6 +116,7 @@ impl App {
             album_art_renderer,
             persistent_settings,
             layout_config: layout_config.clone(),
+            layout_engine,
         };
         
         // Set initial volume from persistent settings
@@ -702,6 +707,9 @@ impl App {
 
         // Update theme
         self.layout_config.theme = themes[next_index].clone();
+
+        // Update layout engine config
+        self.layout_engine.update_config(self.layout_config.clone());
     }
     
 }

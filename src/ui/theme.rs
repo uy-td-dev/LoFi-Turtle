@@ -38,7 +38,7 @@ impl ColorPalette {
     }
 
     /// Parse color string to ratatui Color
-    fn parse_color(color_str: &str) -> Option<Color> {
+    pub fn parse_color(color_str: &str) -> Option<Color> {
         match color_str.to_lowercase().as_str() {
             "black" => Some(Color::Black),
             "red" => Some(Color::Red),
@@ -56,10 +56,21 @@ impl ColorPalette {
             "light_magenta" | "bright_magenta" => Some(Color::LightMagenta),
             "light_cyan" | "bright_cyan" => Some(Color::LightCyan),
             "white" => Some(Color::White),
+            "reset" => Some(Color::Reset),
             _ => {
                 // Try to parse as RGB hex color
-                if color_str.starts_with('#') && color_str.len() == 7 {
-                    if let Ok(rgb) = u32::from_str_radix(&color_str[1..], 16) {
+                if color_str.starts_with('#') {
+                    let hex = if color_str.len() == 7 {
+                        &color_str[1..]
+                    } else if color_str.len() == 4 {
+                        // Handle short hex #RGB -> #RRGGBB (not implemented here for simplicity, but good to know)
+                        // For now just standard 6-digit hex
+                        return None;
+                    } else {
+                        return None;
+                    };
+
+                    if let Ok(rgb) = u32::from_str_radix(hex, 16) {
                         let r = ((rgb >> 16) & 0xFF) as u8;
                         let g = ((rgb >> 8) & 0xFF) as u8;
                         let b = (rgb & 0xFF) as u8;
@@ -74,6 +85,15 @@ impl ColorPalette {
             }
         }
     }
+
+    /// Helper to get color from Option<String> or fallback
+    pub fn get_color_from_option(color_str: Option<&String>, fallback: Color) -> Color {
+        if let Some(s) = color_str {
+            Self::parse_color(s).unwrap_or(fallback)
+        } else {
+            fallback
+        }
+    }
 }
 
 /// Theme manager for styling UI components
@@ -86,6 +106,7 @@ pub struct ThemeManager {
 
 impl ThemeManager {
     /// Create a new theme manager
+    #[allow(dead_code)]
     pub fn new(theme_config: ThemeConfig) -> Self {
         let palette = ColorPalette::from_theme(&theme_config);
         Self {
@@ -107,6 +128,7 @@ impl ThemeManager {
     }
 
     /// Create a style for normal text
+    #[allow(dead_code)]
     pub fn normal_style(&self) -> Style {
         Style::default()
             .fg(self.palette.get_or("foreground", Color::White))
@@ -114,6 +136,7 @@ impl ThemeManager {
     }
 
     /// Create a style for highlighted text
+    #[allow(dead_code)]
     pub fn highlight_style(&self) -> Style {
         Style::default()
             .fg(self.palette.get_or("highlight", Color::Cyan))
@@ -368,6 +391,7 @@ impl Themes {
     }
 
     /// Get theme by name
+    #[allow(dead_code)]
     pub fn get_by_name(name: &str) -> Option<ThemeConfig> {
         match name.to_lowercase().as_str() {
             "dark" => Some(Self::dark()),

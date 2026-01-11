@@ -1,0 +1,78 @@
+version = "1.0"
+name = "Command Center"
+description = "A dense, information-rich layout for power users."
+
+[theme]
+name = "gruvbox_dark"
+
+[theme.colors]
+primary = "#fabd2f"      # Gruvbox Yellow
+secondary = "#fe8019"    # Gruvbox Orange
+background = "#282828"   # Gruvbox Dark
+foreground = "#ebdbb2"   # Gruvbox Light
+border = "#504945"       # Gruvbox Gray
+highlight = "#83a598"    # Gruvbox Blue
+error = "#cc241d"        # Gruvbox Red
+success = "#b8bb26"      # Gruvbox Green
+
+[[widgets]]
+name = "header"
+widget_type = "search_box"
+position = "top"
+size = { length = 3 }
+visible = true
+border = true
+title = "Search"
+
+[[widgets]]
+name = "sidebar"
+widget_type = "sidebar"
+position = "left"
+size = { percentage = 20 }
+visible = true
+border = true
+title = "Library"
+
+[[widgets]]
+name = "playlist"
+widget_type = "playlist_view"
+position = "center"
+size = "fill"
+visible = true
+border = true
+title = "Queue"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "right"
+size = { percentage = 30 }
+visible = true
+border = true
+title = "Control"
+
+[[widgets]]
+name = "art"
+widget_type = "album_art"
+position = "right"
+size = { percentage = 30 }
+visible = true
+border = true
+title = "Cover"
+
+[[widgets]]
+name = "status"
+widget_type = "status_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+[settings]
+auto_save = true
+debounce_ms = 300
+
+[settings.responsive]
+small_width = 100
+medium_width = 140
+large_width = 180

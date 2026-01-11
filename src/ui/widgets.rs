@@ -8,6 +8,7 @@ use ratatui::{
     },
     Frame,
 };
+use std::collections::HashMap;
 
 /// Helper to get color from hex string or name, defaulting to a fallback
 fn get_color(color_str: Option<&String>, fallback: Color) -> Color {
@@ -48,6 +49,74 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     let border_color = get_color(colors.and_then(|c| c.get("border")), Color::DarkGray);
     let highlight_color = get_color(colors.and_then(|c| c.get("highlight")), Color::Yellow);
 
+    // Calculate layout using the layout engine
+    let area = f.area();
+    let layout_areas = match app.layout_engine.calculate_layout(area) {
+        Ok(areas) => areas,
+        Err(e) => {
+            // Fallback if layout calculation fails
+            log::error!("Layout calculation failed: {}", e);
+            HashMap::new()
+        }
+    };
+
+    // Draw widgets based on layout areas
+    // We need to iterate over widgets without borrowing app immutably for the whole loop
+    // because we need to pass mutable app to some draw functions (like draw_visual_panel)
+
+    // First, collect the widgets we need to draw to avoid holding the borrow
+    let widgets_to_draw: Vec<_> = app.layout_config.widgets.iter()
+        .filter(|w| w.visible)
+        .map(|w| (w.name.clone(), w.widget_type.clone()))
+        .collect();
+
+    for (name, widget_type) in widgets_to_draw {
+        if let Some(area) = layout_areas.get(&name) {
+            match widget_type {
+                crate::ui::layout::WidgetType::Sidebar => {
+                    draw_playlist_panel(f, app, *area, primary_color, secondary_color, border_color);
+                },
+                crate::ui::layout::WidgetType::PlaylistView => {
+                    draw_song_list_panel(f, app, *area, primary_color, highlight_color, border_color);
+                },
+                crate::ui::layout::WidgetType::NowPlaying => {
+                    draw_player_controls(f, app, *area, primary_color, secondary_color, border_color);
+                },
+                crate::ui::layout::WidgetType::AlbumArt => {
+                    draw_visual_panel(f, app, *area, secondary_color, border_color);
+                },
+                crate::ui::layout::WidgetType::ProgressBar => {
+                    // Progress bar is usually part of NowPlaying, but if separate:
+                    draw_progress_bar(f, app, *area, primary_color);
+                },
+                crate::ui::layout::WidgetType::StatusBar => {
+                    draw_status_bar(f, app, *area, border_color);
+                },
+                crate::ui::layout::WidgetType::SearchBox => {
+                    draw_header(f, app, *area, primary_color, border_color);
+                },
+                _ => {}
+            }
+        }
+    }
+
+    // If no layout areas (fallback or empty config), use default hardcoded layout
+    if layout_areas.is_empty() {
+        draw_default_layout(f, app, primary_color, secondary_color, highlight_color, border_color);
+    }
+
+    // --- Modals ---
+    if matches!(app.state.input_mode, InputMode::PlaylistCreate | InputMode::PlaylistEdit) {
+        draw_input_modal(f, app, highlight_color);
+    }
+
+    // Draw scanning modal on top if scanning is in progress
+    if app.state.is_scanning {
+        draw_scanning_modal(f, app);
+    }
+}
+
+fn draw_default_layout(f: &mut Frame, app: &mut App, primary: Color, secondary: Color, highlight: Color, border: Color) {
     // Main layout
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -59,7 +128,7 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
         .split(f.area());
 
     // --- Header / Search Bar ---
-    draw_header(f, app, main_chunks[0], primary_color, border_color);
+    draw_header(f, app, main_chunks[0], primary, border);
 
     // --- Main Content Area ---
     // Check visible widgets to decide layout
@@ -89,28 +158,18 @@ pub fn draw_ui(f: &mut Frame, app: &mut App) {
     };
 
     // Draw Panels
-    draw_playlist_panel(f, app, content_chunks[0], primary_color, secondary_color, border_color);
+    draw_playlist_panel(f, app, content_chunks[0], primary, secondary, border);
     
     if content_chunks.len() > 1 {
-        draw_song_list_panel(f, app, content_chunks[1], primary_color, highlight_color, border_color);
+        draw_song_list_panel(f, app, content_chunks[1], primary, highlight, border);
     }
     
     if content_chunks.len() > 2 {
-        draw_visual_panel(f, app, content_chunks[2], secondary_color, border_color);
+        draw_visual_panel(f, app, content_chunks[2], secondary, border);
     }
 
     // --- Player Controls ---
-    draw_player_controls(f, app, main_chunks[2], primary_color, secondary_color, border_color);
-
-    // --- Modals ---
-    if matches!(app.state.input_mode, InputMode::PlaylistCreate | InputMode::PlaylistEdit) {
-        draw_input_modal(f, app, highlight_color);
-    }
-
-    // Draw scanning modal on top if scanning is in progress
-    if app.state.is_scanning {
-        draw_scanning_modal(f, app);
-    }
+    draw_player_controls(f, app, main_chunks[2], primary, secondary, border);
 }
 
 fn draw_scanning_modal(f: &mut Frame, app: &App) {
@@ -436,6 +495,28 @@ fn draw_player_controls(f: &mut Frame, app: &App, area: Rect, primary: Color, se
         Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)
     );
     f.render_widget(Paragraph::new(help).alignment(Alignment::Center), chunks[3]);
+}
+
+fn draw_progress_bar(f: &mut Frame, app: &App, area: Rect, primary: Color) {
+    let progress = if app.state.playback_status.total_duration > 0 {
+        (app.state.playback_status.current_position as f64 / app.state.playback_status.total_duration as f64).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+
+    let gauge = Gauge::default()
+        .gauge_style(Style::default().fg(primary).bg(Color::DarkGray))
+        .ratio(progress)
+        .use_unicode(true);
+    f.render_widget(gauge, area);
+}
+
+fn draw_status_bar(f: &mut Frame, _app: &App, area: Rect, border: Color) {
+    let help = Span::styled(
+        "Space:Play/Pause | Tab:Switch | /:Search | q:Quit",
+        Style::default().fg(border).add_modifier(Modifier::ITALIC)
+    );
+    f.render_widget(Paragraph::new(help).alignment(Alignment::Center), area);
 }
 
 fn draw_input_modal(f: &mut Frame, app: &App, highlight: Color) {

@@ -1,0 +1,52 @@
+version = "1.0"
+name = "Visual Focus"
+description = "A layout that emphasizes album art and visuals."
+
+[theme]
+name = "midnight_blue"
+
+[theme.colors]
+primary = "#00bfff"      # Deep Sky Blue
+secondary = "#1e90ff"    # Dodger Blue
+background = "#000000"   # Pure Black
+foreground = "#f0f8ff"   # Alice Blue
+border = "#191970"       # Midnight Blue
+highlight = "#00ffff"    # Cyan
+error = "#ff4500"        # Orange Red
+success = "#32cd32"      # Lime Green
+
+[[widgets]]
+name = "art"
+widget_type = "album_art"
+position = "center"
+size = "fill"
+visible = true
+border = true
+title = "Now Playing"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "bottom"
+size = { length = 6 }
+visible = true
+border = true
+title = "Controls"
+
+[[widgets]]
+name = "playlist"
+widget_type = "playlist_view"
+position = "left"
+size = { percentage = 20 }
+visible = true
+border = true
+title = "List"
+
+[settings]
+auto_save = true
+debounce_ms = 300
+
+[settings.responsive]
+small_width = 80
+medium_width = 120
+large_width = 160

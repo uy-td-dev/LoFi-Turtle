@@ -1,0 +1,12 @@
+# Custom keymap for testing
+[keybindings]
+"space" = "toggle_play"
+"k" = "toggle_play"  # Vim-like pause
+"l" = "next_track"
+"h" = "previous_track"
+"j" = "volume_down"
+"u" = "volume_up"
+"q" = "quit"
+"/" = "search"
+"tab" = "switch_layout"
+"m" = "toggle_art"

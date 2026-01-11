@@ -1,0 +1,51 @@
+version = "1.0"
+name = "Retro Terminal"
+description = "Old school green-screen terminal vibe."
+
+[theme]
+name = "matrix"
+
+[theme.colors]
+primary = "#00ff00"      # Matrix Green
+secondary = "#008800"    # Darker Green
+background = "#000000"   # Black
+foreground = "#00ff00"   # Matrix Green
+border = "#00ff00"       # Matrix Green
+highlight = "#ccffcc"    # Bright Pale Green
+error = "#ff0000"        # Red (System Failure)
+success = "#00ff00"      # Green
+
+[[widgets]]
+name = "playlist"
+widget_type = "playlist_view"
+position = "left"
+size = { percentage = 60 }
+visible = true
+border = true
+title = "TRACK_LIST"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "right"
+size = "fill"
+visible = true
+border = true
+title = "ACTIVE_MODULE"
+
+[[widgets]]
+name = "status"
+widget_type = "status_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+[settings]
+auto_save = true
+debounce_ms = 300
+
+[settings.responsive]
+small_width = 80
+medium_width = 120
+large_width = 160

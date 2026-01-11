@@ -1,0 +1,67 @@
+version = "1.0"
+name = "Compact Player"
+description = "A small footprint layout focused on the current track."
+
+[theme]
+name = "compact_dark"
+
+[theme.colors]
+primary = "#00ff99"      # Bright Green
+secondary = "#00cc7a"    # Darker Green
+background = "#111111"   # Near Black
+foreground = "#eeeeee"   # Off White
+border = "#333333"       # Dark Gray
+highlight = "#ffffff"    # White
+error = "#ff3333"
+success = "#00ff99"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "top"
+size = { length = 6 }
+visible = true
+border = true
+title = "Now Playing"
+
+[[widgets]]
+name = "progress"
+widget_type = "progress_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+[[widgets]]
+name = "status"
+widget_type = "status_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+# Hidden widgets
+[[widgets]]
+name = "sidebar"
+widget_type = "sidebar"
+position = "left"
+size = { percentage = 0 }
+visible = false
+border = false
+
+[[widgets]]
+name = "playlist"
+widget_type = "playlist_view"
+position = "center"
+size = "fill"
+visible = false # Hidden in compact mode
+border = false
+
+[settings]
+auto_save = true
+debounce_ms = 300
+
+[settings.responsive]
+small_width = 60
+medium_width = 100
+large_width = 140

@@ -176,6 +176,77 @@ impl TuiService {
         
         match app.get_input_mode() {
             InputMode::Normal => {
+                // Check for configured keybindings first
+                let key_str = match key_code {
+                    KeyCode::Char(' ') => "space".to_string(),
+                    KeyCode::Char(c) => c.to_string(),
+                    KeyCode::Enter => "enter".to_string(),
+                    KeyCode::Tab => "tab".to_string(),
+                    KeyCode::BackTab => "backtab".to_string(),
+                    KeyCode::Esc => "esc".to_string(),
+                    KeyCode::Backspace => "backspace".to_string(),
+                    KeyCode::Up => "up".to_string(),
+                    KeyCode::Down => "down".to_string(),
+                    KeyCode::Left => "left".to_string(),
+                    KeyCode::Right => "right".to_string(),
+                    KeyCode::F(n) => format!("f{}", n),
+                    KeyCode::Delete => "delete".to_string(),
+                    KeyCode::Insert => "insert".to_string(),
+                    KeyCode::Home => "home".to_string(),
+                    KeyCode::End => "end".to_string(),
+                    KeyCode::PageUp => "pageup".to_string(),
+                    KeyCode::PageDown => "pagedown".to_string(),
+                    _ => "".to_string(),
+                };
+
+                if !key_str.is_empty() {
+                    if let Some(action) = app.layout_config.keybindings.get(&key_str) {
+                        match action.as_str() {
+                            "quit" => {
+                                app.quit()?;
+                                return Ok(true);
+                            },
+                            "toggle_play" => app.toggle_playback()?,
+                            "next_track" => {
+                                // Logic for next track
+                                app.advance_to_next_song()?;
+                            },
+                            "previous_track" => {
+                                // Logic for previous track
+                                // For now just stop or restart current
+                                app.stop_playback()?;
+                            },
+                            "move_up" => app.move_selection_up(),
+                            "move_down" => app.move_selection_down(),
+                            "select" => {
+                                match app.state.active_panel {
+                                    ActivePanel::Songs => {
+                                        app.play_selected_song()?;
+                                    }
+                                    ActivePanel::Playlists => {
+                                        app.play_selected_playlist()?;
+                                    }
+                                    _ => {}
+                                }
+                            },
+                            "volume_up" => app.increase_volume()?,
+                            "volume_down" => app.decrease_volume()?,
+                            "switch_layout" => {
+                                // Cycle layout logic could go here
+                            },
+                            "switch_theme" => app.cycle_theme(),
+                            "reload_layout" => {
+                                // Reload layout logic
+                            },
+                            "search" => app.enter_search_mode(),
+                            "toggle_art" => app.toggle_album_art(),
+                            _ => {}
+                        }
+                        return Ok(false);
+                    }
+                }
+
+                // Fallback to hardcoded bindings if not found in config
                 match key_code {
                     // Global controls
                     KeyCode::Char('q') => {
