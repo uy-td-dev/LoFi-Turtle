@@ -1,0 +1,80 @@
+version = "1.0"
+name = "Dracula"
+description = "Dracula theme for Lofi Turtle"
+
+[theme]
+name = "dracula"
+
+[theme.colors]
+primary = "#bd93f9"      # Purple
+secondary = "#ff79c6"    # Pink
+background = "#282a36"   # Background
+foreground = "#f8f8f2"   # Foreground
+border = "#6272a4"       # Comment
+highlight = "#8be9fd"    # Cyan
+error = "#ff5555"        # Red
+success = "#50fa7b"      # Green
+playing = "#50fa7b"
+paused = "#ffb86c"       # Orange
+progress = "#bd93f9"
+
+[[widgets]]
+name = "sidebar"
+widget_type = "sidebar"
+position = "left"
+size = { percentage = 25 }
+visible = true
+border = true
+title = "Library"
+
+[[widgets]]
+name = "playlist"
+widget_type = "playlist_view"
+position = "center"
+size = "fill"
+visible = true
+border = true
+title = "Playlist"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "right"
+size = { percentage = 30 }
+visible = true
+border = true
+title = "Now Playing"
+
+[[widgets]]
+name = "album_art"
+widget_type = "album_art"
+position = "right"
+size = { percentage = 25 }
+visible = true
+border = true
+title = "Art"
+
+[[widgets]]
+name = "progress"
+widget_type = "progress_bar"
+position = "bottom"
+size = { length = 3 }
+visible = true
+border = false
+
+[[widgets]]
+name = "status"
+widget_type = "status_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+[settings]
+auto_save = true
+debounce_ms = 300
+
+[settings.responsive]
+small_width = 80
+medium_width = 120
+large_width = 160

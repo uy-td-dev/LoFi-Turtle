@@ -5,7 +5,7 @@ use crate::config::layout_config::LayoutConfig;
 use crate::error::Result;
 
 /// Position of a component in the layout
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Position {
     Left,
@@ -16,7 +16,7 @@ pub enum Position {
 }
 
 /// Size constraint for layout components
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum SizeConstraint {
     Percentage(u16),
@@ -42,13 +42,29 @@ impl From<SizeConstraint> for Constraint {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WidgetConfig {
     pub name: String,
+
+    #[serde(rename = "type", alias = "widget_type")]
     pub widget_type: WidgetType,
+
     pub position: Position,
+
     pub size: SizeConstraint,
+
+    #[serde(default = "default_true")]
     pub visible: bool,
+
+    #[serde(default)]
     pub border: bool,
+
+    #[serde(default)]
     pub title: Option<String>,
+
+    #[serde(default)]
     pub style: WidgetStyle,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Available widget types
@@ -79,11 +95,11 @@ pub struct WidgetStyle {
 impl Default for WidgetStyle {
     fn default() -> Self {
         Self {
-            fg_color: Some("white".to_string()),
-            bg_color: Some("black".to_string()),
-            border_color: Some("gray".to_string()),
-            highlight_color: Some("cyan".to_string()),
-            selected_color: Some("yellow".to_string()),
+            fg_color: None,
+            bg_color: None,
+            border_color: None,
+            highlight_color: None,
+            selected_color: None,
         }
     }
 }
@@ -106,65 +122,44 @@ pub struct StyleConfig {
     pub underline: Option<bool>,
 }
 
-/// Border configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct BorderConfig {
-    pub style: String, // "rounded", "plain", "thick", "double"
-    pub color: String,
-}
-
 impl Default for ThemeConfig {
     fn default() -> Self {
         let mut colors = HashMap::new();
         colors.insert("primary".to_string(), "cyan".to_string());
-        colors.insert("secondary".to_string(), "yellow".to_string());
         colors.insert("background".to_string(), "black".to_string());
         colors.insert("foreground".to_string(), "white".to_string());
-        colors.insert("border".to_string(), "gray".to_string());
-        colors.insert("highlight".to_string(), "bright_cyan".to_string());
-        colors.insert("error".to_string(), "red".to_string());
-        colors.insert("success".to_string(), "green".to_string());
-
-        let mut styles = HashMap::new();
-        styles.insert("normal".to_string(), StyleConfig {
-            fg: Some("foreground".to_string()),
-            bg: Some("background".to_string()),
-            bold: None,
-            italic: None,
-            underline: None,
-        });
-        styles.insert("selected".to_string(), StyleConfig {
-            fg: Some("primary".to_string()),
-            bg: Some("background".to_string()),
-            bold: Some(true),
-            italic: None,
-            underline: None,
-        });
 
         Self {
             name: "default".to_string(),
             colors: Some(colors),
-            styles: Some(styles),
+            styles: None,
         }
     }
 }
 
-// LayoutConfig is now defined in config::layout_config module
-
 /// Layout-specific settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LayoutSettings {
+    #[serde(default = "default_true")]
     pub auto_save: bool,
+
+    #[serde(default = "default_debounce")]
     pub debounce_ms: u64,
+
+    #[serde(default)]
     pub responsive: ResponsiveBreakpoints,
+}
+
+fn default_debounce() -> u64 {
+    300
 }
 
 /// Responsive design breakpoints
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResponsiveBreakpoints {
-    pub small_width: u16,   // Terminal width < small
-    pub medium_width: u16,  // small <= width < medium
-    pub large_width: u16,   // medium <= width < large
+    pub small_width: u16,
+    pub medium_width: u16,
+    pub large_width: u16,
 }
 
 impl Default for ResponsiveBreakpoints {
@@ -187,8 +182,6 @@ impl Default for LayoutSettings {
     }
 }
 
-// LayoutConfig implementation is now in config::layout_config module
-
 /// Responsive layout modes
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResponsiveMode {
@@ -201,7 +194,7 @@ pub enum ResponsiveMode {
 /// Layout engine for rendering the UI
 pub struct LayoutEngine {
     config: LayoutConfig,
-    cached_layouts: HashMap<(u16, u16), Vec<Rect>>, // Cache layouts by terminal size
+    cached_layouts: HashMap<(u16, u16), HashMap<String, Rect>>,
 }
 
 impl LayoutEngine {
@@ -212,156 +205,283 @@ impl LayoutEngine {
         }
     }
 
-    /// Update the layout configuration
     pub fn update_config(&mut self, config: LayoutConfig) {
         self.config = config;
-        self.cached_layouts.clear(); // Clear cache when config changes
+        self.cached_layouts.clear();
     }
 
     /// Calculate layout for the given terminal area
-    #[allow(dead_code)]
     pub fn calculate_layout(&mut self, area: Rect) -> Result<HashMap<String, Rect>> {
         let cache_key = (area.width, area.height);
         
-        // Check if we have a cached layout
         if let Some(cached) = self.cached_layouts.get(&cache_key) {
-            return Ok(self.map_widgets_to_areas(cached));
+            return Ok(cached.clone());
         }
 
         let responsive_mode = self.config.get_responsive_mode(area.width);
-        let layout_areas = self.build_layout(area, responsive_mode)?;
+        let layout_map = self.build_layout(area, responsive_mode)?;
         
-        // Cache the layout
-        self.cached_layouts.insert(cache_key, layout_areas.clone());
+        self.cached_layouts.insert(cache_key, layout_map.clone());
         
-        Ok(self.map_widgets_to_areas(&layout_areas))
+        Ok(layout_map)
     }
 
     /// Build the actual layout based on widget configuration
-    #[allow(dead_code)]
-    fn build_layout(&self, area: Rect, _responsive_mode: ResponsiveMode) -> Result<Vec<Rect>> {
-        let visible_widgets: Vec<_> = self.config.widgets
-            .iter()
-            .filter(|w| w.visible)
-            .collect();
-
-        if visible_widgets.is_empty() {
-            return Ok(vec![area]);
-        }
-
-        // Group widgets by position
-        let top_widgets = self.config.widgets_by_position(Position::Top);
-        let bottom_widgets = self.config.widgets_by_position(Position::Bottom);
-        let left_widgets = self.config.widgets_by_position(Position::Left);
-        let right_widgets = self.config.widgets_by_position(Position::Right);
-        let center_widgets = self.config.widgets_by_position(Position::Center);
-
-        let mut areas = Vec::new();
+    /// Refactored to return a Map directly, ensuring widget names match their areas
+    fn build_layout(&self, area: Rect, _responsive_mode: ResponsiveMode) -> Result<HashMap<String, Rect>> {
+        let mut result = HashMap::new();
         let mut current_area = area;
 
-        // Handle top widgets
+        // 1. Process Top Widgets
+        let top_widgets = self.get_visible_widgets_by_pos(Position::Top);
         if !top_widgets.is_empty() {
-            let constraints: Vec<Constraint> = top_widgets
-                .iter()
-                .map(|w| w.size.clone().into())
-                .collect();
-            let top_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(constraints)
-                .split(current_area);
-            
-            areas.extend(top_layout.iter().take(top_widgets.len()).cloned());
-            current_area = Rect {
-                y: current_area.y + top_layout.iter().take(top_widgets.len()).map(|r| r.height).sum::<u16>(),
-                height: current_area.height - top_layout.iter().take(top_widgets.len()).map(|r| r.height).sum::<u16>(),
-                ..current_area
-            };
+            let (areas, remaining) = self.split_vertical(current_area, &top_widgets, true);
+            for (widget, rect) in top_widgets.iter().zip(areas.into_iter()) {
+                result.insert(widget.name.clone(), rect);
+            }
+            current_area = remaining;
         }
 
-        // Handle bottom widgets
+        // 2. Process Bottom Widgets
+        let bottom_widgets = self.get_visible_widgets_by_pos(Position::Bottom);
         if !bottom_widgets.is_empty() {
-            let total_bottom_height: u16 = bottom_widgets
-                .iter()
-                .map(|w| match &w.size {
-                    SizeConstraint::Length(l) => *l,
-                    SizeConstraint::Percentage(p) => (area.height * p / 100).max(1),
-                    _ => 3, // Default height
-                })
-                .sum();
-
-            current_area.height = current_area.height.saturating_sub(total_bottom_height);
-
-            let constraints: Vec<Constraint> = bottom_widgets
-                .iter()
-                .map(|w| w.size.clone().into())
-                .collect();
-            
-            let bottom_area = Rect {
-                y: current_area.y + current_area.height,
-                height: total_bottom_height,
-                ..current_area
-            };
-
-            let bottom_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints(constraints)
-                .split(bottom_area);
-            
-            areas.extend(bottom_layout.iter().take(bottom_widgets.len()).cloned());
+            let (areas, remaining) = self.split_vertical(current_area, &bottom_widgets, false);
+            for (widget, rect) in bottom_widgets.iter().zip(areas.into_iter()) {
+                result.insert(widget.name.clone(), rect);
+            }
+            current_area = remaining;
         }
 
-        // Handle horizontal layout (left, center, right)
-        let mut horizontal_constraints: Vec<Constraint> = Vec::new();
-        let mut horizontal_widget_count = 0;
+        // 3. Process Middle (Left, Center, Right)
+        let left_widgets = self.get_visible_widgets_by_pos(Position::Left);
+        let center_widgets = self.get_visible_widgets_by_pos(Position::Center);
+        let right_widgets = self.get_visible_widgets_by_pos(Position::Right);
 
-        if !left_widgets.is_empty() {
-            horizontal_constraints.extend(left_widgets.iter().map(|w| -> Constraint { w.size.clone().into() }));
-            horizontal_widget_count += left_widgets.len();
+        let mut constraints: Vec<Constraint> = Vec::new();
+        let mut middle_widgets = Vec::new();
+
+        // Collect all horizontal widgets in order: Left -> Center -> Right
+        for w in &left_widgets {
+            constraints.push(w.size.clone().into());
+            middle_widgets.push(w);
+        }
+        for w in &center_widgets {
+            constraints.push(w.size.clone().into());
+            middle_widgets.push(w);
+        }
+        for w in &right_widgets {
+            constraints.push(w.size.clone().into());
+            middle_widgets.push(w);
         }
 
-        if !center_widgets.is_empty() {
-            horizontal_constraints.extend(center_widgets.iter().map(|w| -> Constraint { w.size.clone().into() }));
-            horizontal_widget_count += center_widgets.len();
-        }
-
-        if !right_widgets.is_empty() {
-            horizontal_constraints.extend(right_widgets.iter().map(|w| -> Constraint { w.size.clone().into() }));
-            horizontal_widget_count += right_widgets.len();
-        }
-
-        if horizontal_widget_count > 0 {
+        if !constraints.is_empty() {
             let horizontal_layout = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints(horizontal_constraints)
+                .constraints(constraints)
                 .split(current_area);
-            
-            areas.extend(horizontal_layout.iter().take(horizontal_widget_count).cloned());
-        }
 
-        Ok(areas)
-    }
-
-    /// Map calculated areas to widget names
-    #[allow(dead_code)]
-    fn map_widgets_to_areas(&self, areas: &[Rect]) -> HashMap<String, Rect> {
-        let mut widget_areas = HashMap::new();
-        let visible_widgets: Vec<_> = self.config.widgets
-            .iter()
-            .filter(|w| w.visible)
-            .collect();
-
-        for (i, widget) in visible_widgets.iter().enumerate() {
-            if let Some(area) = areas.get(i) {
-                widget_areas.insert(widget.name.clone(), *area);
+            for (widget, rect) in middle_widgets.iter().zip(horizontal_layout.iter()) {
+                result.insert(widget.name.clone(), *rect);
             }
         }
 
-        widget_areas
+        Ok(result)
     }
 
-    /// Get the current layout configuration
-    #[allow(dead_code)]
+    /// Helper to get visible widgets for a specific position
+    fn get_visible_widgets_by_pos(&self, pos: Position) -> Vec<&WidgetConfig> {
+        self.config.widgets.iter()
+            .filter(|w| w.visible && w.position == pos)
+            .collect()
+    }
+
+    /// Helper to split an area vertically (for Top/Bottom)
+    /// Returns (Vector of Rects for widgets, Remaining Rect)
+    fn split_vertical(&self, area: Rect, widgets: &[&WidgetConfig], is_top: bool) -> (Vec<Rect>, Rect) {
+        if is_top {
+            let mut constraints: Vec<Constraint> = widgets.iter()
+                .map(|w| w.size.clone().into())
+                .collect();
+
+            // Add a constraint for the remaining space
+            constraints.push(Constraint::Fill(1));
+
+            let layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(constraints)
+                .split(area);
+
+            let widget_areas = layout.iter().take(widgets.len()).cloned().collect();
+            let remaining = *layout.last().unwrap_or(&area);
+
+            (widget_areas, remaining)
+        } else {
+            // Bottom logic
+            // We want the widgets to be at the bottom.
+            // Layout: [Remaining (Fill), Widget 1, Widget 2...]
+
+            let mut bottom_constraints = vec![Constraint::Fill(1)]; // Top filler
+            bottom_constraints.extend(widgets.iter().map(|w| -> Constraint { w.size.clone().into() }));
+
+            let bottom_layout = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(bottom_constraints)
+                .split(area);
+            
+            let remaining = bottom_layout[0];
+            let widget_areas = bottom_layout.iter().skip(1).cloned().collect();
+
+            (widget_areas, remaining)
+        }
+    }
+
     pub fn config(&self) -> &LayoutConfig {
         &self.config
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::layout_config::LayoutConfig;
+
+    fn create_test_config(widgets: Vec<WidgetConfig>) -> LayoutConfig {
+        let mut config = LayoutConfig::default();
+        config.widgets = widgets;
+        config
+    }
+
+    fn create_widget(name: &str, pos: Position, size: SizeConstraint) -> WidgetConfig {
+        WidgetConfig {
+            name: name.to_string(),
+            widget_type: WidgetType::Sidebar, // Dummy type
+            position: pos,
+            size,
+            visible: true,
+            border: false,
+            title: None,
+            style: WidgetStyle::default(),
+        }
+    }
+
+    #[test]
+    fn test_layout_top_only() {
+        let widgets = vec![
+            create_widget("top1", Position::Top, SizeConstraint::Length(10)),
+        ];
+        let config = create_test_config(widgets);
+        let mut engine = LayoutEngine::new(config);
+        let area = Rect::new(0, 0, 100, 100);
+
+        let result = engine.calculate_layout(area).unwrap();
+
+        assert!(result.contains_key("top1"));
+        let rect = result.get("top1").unwrap();
+        assert_eq!(rect.height, 10);
+        assert_eq!(rect.y, 0);
+    }
+
+    #[test]
+    fn test_layout_bottom_only() {
+        let widgets = vec![
+            create_widget("bot1", Position::Bottom, SizeConstraint::Length(10)),
+        ];
+        let config = create_test_config(widgets);
+        let mut engine = LayoutEngine::new(config);
+        let area = Rect::new(0, 0, 100, 100);
+
+        let result = engine.calculate_layout(area).unwrap();
+
+        assert!(result.contains_key("bot1"));
+        let rect = result.get("bot1").unwrap();
+        assert_eq!(rect.height, 10);
+        assert_eq!(rect.y, 90); // 100 - 10
+    }
+
+    #[test]
+    fn test_layout_top_and_bottom() {
+        let widgets = vec![
+            create_widget("top", Position::Top, SizeConstraint::Length(10)),
+            create_widget("bot", Position::Bottom, SizeConstraint::Length(10)),
+        ];
+        let config = create_test_config(widgets);
+        let mut engine = LayoutEngine::new(config);
+        let area = Rect::new(0, 0, 100, 100);
+
+        let result = engine.calculate_layout(area).unwrap();
+
+        let top = result.get("top").unwrap();
+        assert_eq!(top.y, 0);
+        assert_eq!(top.height, 10);
+
+        let bot = result.get("bot").unwrap();
+        assert_eq!(bot.y, 90);
+        assert_eq!(bot.height, 10);
+    }
+
+    #[test]
+    fn test_layout_middle_split() {
+        let widgets = vec![
+            create_widget("left", Position::Left, SizeConstraint::Percentage(20)),
+            create_widget("center", Position::Center, SizeConstraint::Fill),
+            create_widget("right", Position::Right, SizeConstraint::Percentage(20)),
+        ];
+        let config = create_test_config(widgets);
+        let mut engine = LayoutEngine::new(config);
+        let area = Rect::new(0, 0, 100, 100);
+
+        let result = engine.calculate_layout(area).unwrap();
+
+        let left = result.get("left").unwrap();
+        assert_eq!(left.x, 0);
+        assert_eq!(left.width, 20);
+
+        let right = result.get("right").unwrap();
+        // Ratatui layout calculation might vary slightly with Fill, but roughly:
+        // Left 20, Center Fill, Right 20.
+        // Center should be ~60.
+        assert!(right.x >= 80);
+        assert_eq!(right.width, 20);
+
+        let center = result.get("center").unwrap();
+        assert_eq!(center.x, 20);
+        assert_eq!(center.width, 60);
+    }
+
+    #[test]
+    fn test_complex_layout() {
+        // Top (10), Bottom (10), Left (20%), Center (Fill)
+        let widgets = vec![
+            create_widget("top", Position::Top, SizeConstraint::Length(10)),
+            create_widget("bot", Position::Bottom, SizeConstraint::Length(10)),
+            create_widget("left", Position::Left, SizeConstraint::Percentage(20)),
+            create_widget("center", Position::Center, SizeConstraint::Fill),
+        ];
+        let config = create_test_config(widgets);
+        let mut engine = LayoutEngine::new(config);
+        let area = Rect::new(0, 0, 100, 100);
+
+        let result = engine.calculate_layout(area).unwrap();
+
+        // Check vertical space remaining for middle: 100 - 10 - 10 = 80
+        let left = result.get("left").unwrap();
+        assert_eq!(left.height, 80);
+        assert_eq!(left.y, 10); // Starts after top
+
+        let center = result.get("center").unwrap();
+        assert_eq!(center.height, 80);
+    }
+
+    #[test]
+    fn test_hidden_widget() {
+        let mut w = create_widget("hidden", Position::Top, SizeConstraint::Length(10));
+        w.visible = false;
+        let widgets = vec![w];
+        let config = create_test_config(widgets);
+        let mut engine = LayoutEngine::new(config);
+        let area = Rect::new(0, 0, 100, 100);
+
+        let result = engine.calculate_layout(area).unwrap();
+        assert!(result.is_empty());
     }
 }

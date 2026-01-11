@@ -12,6 +12,7 @@ use crate::ui::layout::ThemeConfig;
 
 /// Complete layout configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct LayoutConfig {
     /// Configuration version for compatibility checking
     pub version: String,
@@ -83,6 +84,7 @@ impl LayoutConfig {
     }
     
     /// Convert to TOML string
+    #[allow(dead_code)]
     pub fn to_toml_string(&self) -> Result<String> {
         toml::to_string_pretty(self)
             .map_err(|e| LofiTurtleError::Configuration(
@@ -91,6 +93,7 @@ impl LayoutConfig {
     }
     
     /// Validate the layout configuration
+    #[allow(dead_code)]
     pub fn validate(&self) -> Result<()> {
         // Check version compatibility
         if self.version.is_empty() {
@@ -134,6 +137,7 @@ impl LayoutConfig {
     }
     
     /// Get widget by name
+    #[allow(dead_code)]
     pub fn get_widget(&self, name: &str) -> Option<&WidgetConfig> {
         self.widgets.iter().find(|w| w.name == name)
     }
@@ -145,26 +149,31 @@ impl LayoutConfig {
     }
     
     /// Check if a widget exists and is visible
+    #[allow(dead_code)]
     pub fn is_widget_visible(&self, name: &str) -> bool {
         self.get_widget(name).map_or(false, |w| w.visible)
     }
     
     /// Get all visible widgets
+    #[allow(dead_code)]
     pub fn get_visible_widgets(&self) -> Vec<&WidgetConfig> {
         self.widgets.iter().filter(|w| w.visible).collect()
     }
     
     /// Get keybinding action for a key
+    #[allow(dead_code)]
     pub fn get_keybinding(&self, key: &str) -> Option<&String> {
         self.keybindings.get(key)
     }
     
     /// Add or update a keybinding
+    #[allow(dead_code)]
     pub fn set_keybinding(&mut self, key: String, action: String) {
         self.keybindings.insert(key, action);
     }
     
     /// Remove a keybinding
+    #[allow(dead_code)]
     pub fn remove_keybinding(&mut self, key: &str) -> Option<String> {
         self.keybindings.remove(key)
     }

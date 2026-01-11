@@ -175,6 +175,7 @@ impl PlaybackState {
     }
 
     /// Get the previous song index based on current state
+    #[allow(dead_code)]
     pub fn previous_song_index(&mut self, playlist_size: usize) -> Option<usize> {
         if playlist_size == 0 {
             return None;

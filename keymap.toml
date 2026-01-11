@@ -1,0 +1,46 @@
+# LoFi Turtle Keymap Configuration
+# Customize your keyboard shortcuts here
+
+[keybindings]
+# Playback controls
+"space" = "toggle_play"
+"n" = "next_track"
+"p" = "previous_track"
+"s" = "stop_playback"
+"S" = "toggle_shuffle"
+"R" = "cycle_repeat_mode"
+
+# Volume controls
+"]" = "volume_up"
+"[" = "volume_down"
+
+# Navigation
+"up" = "move_up"
+"down" = "move_down"
+"left" = "switch_to_previous_panel"
+"right" = "switch_to_next_panel"
+"h" = "switch_to_previous_panel"
+"j" = "move_down"
+"k" = "move_up"
+"l" = "switch_to_library"
+"tab" = "switch_to_next_panel"
+"backtab" = "switch_to_previous_panel"
+
+# Interface controls
+"enter" = "select"
+"esc" = "quit"
+"backspace" = "switch_to_library"
+"/" = "search"
+"c" = "clear_search"
+"a" = "toggle_art"
+"f3" = "switch_theme"
+
+# Playlist management
+"N" = "create_playlist"
+"D" = "delete_playlist"
+"E" = "edit_playlist"
+"+" = "add_to_playlist"
+"-" = "remove_from_playlist"
+
+# Application controls
+"q" = "quit"

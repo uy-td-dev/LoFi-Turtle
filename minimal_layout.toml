@@ -1,0 +1,51 @@
+version = "1.0"
+name = "Minimalist"
+description = "A clean, distraction-free layout"
+
+[theme]
+name = "light"
+
+[theme.colors]
+primary = "#000000"
+secondary = "#444444"
+background = "#ffffff"
+foreground = "#000000"
+border = "#dddddd"
+highlight = "#eeeeee"
+error = "#ff0000"
+success = "#00ff00"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "top"
+size = { length = 5 }
+visible = true
+border = true
+title = "Now Playing"
+
+[[widgets]]
+name = "playlist"
+widget_type = "playlist_view"
+position = "center"
+size = "fill"
+visible = true
+border = false
+title = "Queue"
+
+[[widgets]]
+name = "status"
+widget_type = "status_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+[settings]
+auto_save = true
+debounce_ms = 300
+
+[settings.responsive]
+small_width = 80
+medium_width = 120
+large_width = 160

@@ -1,0 +1,80 @@
+version = "1.0"
+name = "Matrix Theme"
+description = "A custom matrix-inspired theme for testing"
+
+[theme]
+name = "matrix"
+
+[theme.colors]
+primary = "#00ff00"      # Bright Green
+secondary = "#008f11"    # Darker Green
+background = "#0d0208"   # Very Dark
+foreground = "#00ff41"   # Matrix Green
+border = "#003b00"       # Dark Green Border
+highlight = "#ccffcc"    # Very Bright Green
+error = "#ff0000"        # Red
+success = "#00ff00"      # Green
+playing = "#00ff00"
+paused = "#008f11"
+progress = "#00ff41"
+
+[[widgets]]
+name = "sidebar"
+widget_type = "sidebar"
+position = "left"
+size = { percentage = 20 }
+visible = true
+border = true
+title = "Matrix Lib"
+
+[[widgets]]
+name = "playlist"
+widget_type = "playlist_view"
+position = "center"
+size = "fill"
+visible = true
+border = true
+title = "Construct"
+
+[[widgets]]
+name = "now_playing"
+widget_type = "now_playing"
+position = "right"
+size = { percentage = 35 }
+visible = true
+border = true
+title = "Active Signal"
+
+[[widgets]]
+name = "album_art"
+widget_type = "album_art"
+position = "right"
+size = { percentage = 25 }
+visible = true
+border = true
+title = "Visual Input"
+
+[[widgets]]
+name = "progress"
+widget_type = "progress_bar"
+position = "bottom"
+size = { length = 3 }
+visible = true
+border = false
+
+[[widgets]]
+name = "status"
+widget_type = "status_bar"
+position = "bottom"
+size = { length = 1 }
+visible = true
+border = false
+
+[settings]
+auto_save = true
+debounce_ms = 300
+
+[settings.responsive]
+small_width = 80
+medium_width = 120
+large_width = 160

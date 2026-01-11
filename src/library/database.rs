@@ -398,6 +398,7 @@ impl Database {
     }
 
     /// Check if a playlist exists
+    #[allow(dead_code)]
     pub fn playlist_exists(&self, name: &str) -> Result<bool> {
         let mut stmt = self.conn.prepare("SELECT 1 FROM playlists WHERE name = ?1")
             .map_err(LofiTurtleError::Database)?;
